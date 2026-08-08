@@ -1,0 +1,15 @@
+{
+  "name": "DnD Companion",
+  "short_name": "DnD Companion",
+  "description": "Спутник игрока и мастера: листы персонажей, бестиарий, предметы, свой контент",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#181426",
+  "theme_color": "#181426",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

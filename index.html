@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#181426">
+<title>DnD Companion</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <h1 id="headerTitle">Персонажи</h1>
+  <button class="icon-btn" id="settingsBtn" title="Настройки">⚙️</button>
+</header>
+
+<main>
+
+  <!-- ===== CHARACTERS LIST VIEW ===== -->
+  <section class="view active" id="view-characters">
+    <div id="charList"></div>
+    <div class="empty-state" id="charEmpty">Пока нет ни одного персонажа.<br>Нажмите «+», чтобы создать первого.</div>
+  </section>
+
+  <!-- ===== CHARACTER SHEET VIEW ===== -->
+  <section class="view" id="view-sheet">
+    <div class="row" style="margin-bottom:10px">
+      <button class="secondary" id="backToList">← К списку</button>
+      <button class="danger" id="deleteCharBtn">Удалить</button>
+    </div>
+
+    <div class="card">
+      <label>Имя персонажа</label>
+      <input id="sheetName" placeholder="Имя">
+      <div class="row">
+        <div>
+          <label>Раса</label>
+          <select id="sheetRace"></select>
+        </div>
+        <div>
+          <label>Класс</label>
+          <select id="sheetClass"></select>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Уровень</label>
+          <input id="sheetLevel" type="number" min="1" max="20" value="1">
+        </div>
+        <div>
+          <label>Предыстория</label>
+          <input id="sheetBackground" placeholder="Например, Солдат">
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">Характеристики</div>
+    <div class="ability-grid" id="abilityGrid"></div>
+
+    <div class="card">
+      <h3>Здоровье и защита</h3>
+      <div class="row">
+        <div>
+          <label>КД</label>
+          <input id="sheetAC" type="number" value="10">
+        </div>
+        <div>
+          <label>Скорость</label>
+          <input id="sheetSpeed" placeholder="30 фт" value="30 фт">
+        </div>
+        <div>
+          <label>Бонус мастерства</label>
+          <input id="sheetProf" type="number" value="2">
+        </div>
+      </div>
+      <label>Хиты (текущие / максимум / временные)</label>
+      <div class="hp-track">
+        <input id="hpCurrent" type="number" value="10">
+        <span>/</span>
+        <input id="hpMax" type="number" value="10">
+        <span>+</span>
+        <input id="hpTemp" type="number" value="0">
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Навыки</h3>
+      <div id="skillsList"></div>
+    </div>
+
+    <div class="card">
+      <h3>Инвентарь</h3>
+      <div id="sheetInventory"></div>
+      <button class="secondary block" id="addInvFromCatalog">+ Добавить предмет из каталога</button>
+    </div>
+
+    <div class="card">
+      <h3>Заклинания</h3>
+      <div id="sheetSpellsKnown"></div>
+      <button class="secondary block" id="addSpellFromCatalog">+ Добавить заклинание из каталога</button>
+      <label style="margin-top:8px">Способности класса, прочие заметки о магии</label>
+      <textarea id="sheetSpells" placeholder="Способности класса, заговоры по расе и т.п."></textarea>
+    </div>
+
+    <div class="card">
+      <h3>Заметки, снаряжение, история</h3>
+      <textarea id="sheetNotes" placeholder="Свободные заметки"></textarea>
+    </div>
+  </section>
+
+  <!-- ===== SPELLS VIEW ===== -->
+  <section class="view" id="view-spells">
+    <div class="section-title" style="margin-top:0">Уровень</div>
+    <div class="chip-row" id="spellLevelFilter"></div>
+    <div class="section-title">Класс</div>
+    <div class="chip-row" id="spellClassFilter"></div>
+    <div class="section-title">Школа</div>
+    <div class="chip-row" id="spellSchoolFilter"></div>
+    <input id="spellSearch" placeholder="Поиск по названию…" style="margin-top:4px">
+    <div id="spellsList"></div>
+  </section>
+
+  <!-- ===== BESTIARY VIEW ===== -->
+  <section class="view" id="view-bestiary">
+    <div class="chip-row" id="bestiaryFilter"></div>
+    <div id="bestiaryList"></div>
+  </section>
+
+  <!-- ===== ITEMS VIEW ===== -->
+  <section class="view" id="view-items">
+    <div class="chip-row" id="itemsFilter"></div>
+    <div id="itemsList"></div>
+  </section>
+
+  <!-- ===== SETTINGS VIEW ===== -->
+  <section class="view" id="view-settings">
+    <div class="card">
+      <h3>Свой контент</h3>
+      <p style="color:var(--text-dim);font-size:13px;margin-top:0">
+        Персонажи, а также добавленные вами существа и предметы хранятся прямо на устройстве.
+      </p>
+    </div>
+    <div class="card">
+      <h3>Импорт / Экспорт</h3>
+      <button class="primary block" id="exportBtn">⬇ Экспортировать всё в файл</button>
+      <button class="secondary block" id="importBtn">⬆ Импортировать из файла</button>
+      <input type="file" id="importFile" accept="application/json" style="display:none">
+      <p style="color:var(--text-dim);font-size:12px">
+        Экспорт сохранит персонажей, добавленных существ и предметы в один .json файл — им можно поделиться
+        или перенести на другое устройство.
+      </p>
+    </div>
+    <div class="card">
+      <h3>Сброс</h3>
+      <button class="danger block" id="resetBtn">Стереть все данные приложения</button>
+    </div>
+  </section>
+
+</main>
+
+<nav class="tabbar">
+  <button data-view="characters" class="active"><span class="tab-icon">📜</span>Персонажи</button>
+  <button data-view="spells"><span class="tab-icon">✨</span>Заклинания</button>
+  <button data-view="bestiary"><span class="tab-icon">🐉</span>Бестиарий</button>
+  <button data-view="items"><span class="tab-icon">🎒</span>Предметы</button>
+  <button data-view="settings"><span class="tab-icon">⚙️</span>Настройки</button>
+</nav>
+
+<button class="fab" id="fabAdd">+</button>
+
+<!-- Generic modal for add/edit forms -->
+<div class="modal-backdrop hidden" id="modalBackdrop">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="modalTitle">Заголовок</span>
+      <button class="close-x" id="modalClose">✕</button>
+    </div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
