@@ -35,6 +35,7 @@ applyTheme();
 let currentCharId = null;
 let activeView = 'characters';
 let bestiaryFilter = 'Все';
+let bestiaryCrFilter = 'Все';
 let itemsFilter = 'Все';
 let spellLevelFilter = 'Все';
 let spellClassFilter = 'Все';
@@ -114,8 +115,8 @@ function avatarInnerHtml(record, fallbackEmoji) {
   if (record && record.avatarImage) return `<img src="${record.avatarImage}" alt="">`;
   return escapeHtml((record && record.avatar) || fallbackEmoji || '🧙');
 }
-function avatarPickerHtml(id, record, fallbackEmoji) {
-  return `<button type="button" class="avatar-circle" id="${id}">${avatarInnerHtml(record, fallbackEmoji)}</button>`;
+function avatarPickerHtml(id, record, fallbackEmoji, large) {
+  return `<button type="button" class="avatar-circle${large ? ' large' : ''}" id="${id}">${avatarInnerHtml(record, fallbackEmoji)}</button>`;
 }
 function resizeImageFile(file, maxDim, cb) {
   const reader = new FileReader();
@@ -687,6 +688,16 @@ document.getElementById('deleteCharBtn').addEventListener('click', () => {
 });
 
 // ==================== BESTIARY ====================
+function crToNumber(cr) {
+  if (!cr) return 0;
+  const s = String(cr).trim();
+  if (s.includes('/')) {
+    const [a, b] = s.split('/').map(Number);
+    return b ? a / b : 0;
+  }
+  return parseFloat(s) || 0;
+}
+
 function renderBestiaryFilterChips() {
   const types = ['Все', ...new Set(state.bestiary.map(b => b.type))];
   const wrap = document.getElementById('bestiaryFilter');
@@ -694,12 +705,25 @@ function renderBestiaryFilterChips() {
   wrap.querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', () => { bestiaryFilter = chip.dataset.t; renderBestiary(); });
   });
+
+  const crWrap = document.getElementById('bestiaryCrFilter');
+  const crValues = ['Все', ...new Set(state.bestiary.map(b => b.cr).filter(Boolean))].sort((a, b) => {
+    if (a === 'Все') return -1;
+    if (b === 'Все') return 1;
+    return crToNumber(a) - crToNumber(b);
+  });
+  crWrap.innerHTML = crValues.map(cr => `<button class="chip ${cr === bestiaryCrFilter ? 'active' : ''}" data-cr="${escapeHtml(cr)}">${cr === 'Все' ? 'Все' : 'КО ' + escapeHtml(cr)}</button>`).join('');
+  crWrap.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => { bestiaryCrFilter = chip.dataset.cr; renderBestiary(); });
+  });
 }
 
 function renderBestiary() {
   renderBestiaryFilterChips();
   const list = document.getElementById('bestiaryList');
-  const items = state.bestiary.filter(b => bestiaryFilter === 'Все' || b.type === bestiaryFilter);
+  const items = state.bestiary
+    .filter(b => (bestiaryFilter === 'Все' || b.type === bestiaryFilter) && (bestiaryCrFilter === 'Все' || b.cr === bestiaryCrFilter))
+    .sort((a, b) => crToNumber(a.cr) - crToNumber(b.cr));
   if (!items.length) { list.innerHTML = '<div class="empty-state">Ничего не найдено</div>'; return; }
   list.innerHTML = items.map(b => `
     <div class="list-item" data-id="${b.id}">
@@ -723,7 +747,7 @@ function openBestiaryDetail(id) {
   const abRow = ab ? Object.entries(ab).map(([k, v]) => `${k.toUpperCase()} ${v} (${fmtMod(mod(v))})`).join(' · ') : '';
   const editBtn = b.custom ? `<button class="secondary block" id="editBeast">Редактировать</button><button class="danger block" id="deleteBeast">Удалить</button>` : '';
   openModal(b.name, `
-    <div class="avatar-circle" style="margin:0 auto 12px">${avatarInnerHtml(b, defaultBeastEmoji(b.type))}</div>
+    <div class="avatar-circle large" style="margin:0 auto 12px">${avatarInnerHtml(b, defaultBeastEmoji(b.type))}</div>
     <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(b.type)} · КО ${escapeHtml(b.cr)}</div>
     <div style="margin-bottom:8px">КД ${b.ac} · ХП ${escapeHtml(String(b.hp))} · Скорость ${escapeHtml(b.speed)}</div>
     <div style="margin-bottom:8px;font-size:13px;color:var(--text-dim)">${abRow}</div>
@@ -747,7 +771,7 @@ function openBestiaryDetail(id) {
 function openBestiaryForm(existing) {
   const b = existing || { id: uid('b'), name: '', type: '', cr: '', ac: 10, hp: '', speed: '30 фт', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, actions: '', description: '', avatar: '', custom: true };
   openModal(existing ? 'Редактировать существо' : 'Новое существо', `
-    <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('bAvatar', b, defaultBeastEmoji(b.type))}</div>
+    <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('bAvatar', b, defaultBeastEmoji(b.type), true)}</div>
     <label>Название</label><input id="bName" value="${escapeAttr(b.name)}">
     <label>Тип</label><input id="bType" value="${escapeAttr(b.type)}" placeholder="Например, Гуманоид">
     <div class="row">
@@ -1028,7 +1052,7 @@ function openItemDetail(id) {
   playPageTurn();
   const editBtn = it.custom ? `<button class="secondary block" id="editItem">Редактировать</button><button class="danger block" id="deleteItem">Удалить</button>` : '';
   openModal(it.name, `
-    <div class="avatar-circle" style="margin:0 auto 12px">${avatarInnerHtml(it, defaultItemEmoji(it.type))}</div>
+    <div class="avatar-circle large" style="margin:0 auto 12px">${avatarInnerHtml(it, defaultItemEmoji(it.type))}</div>
     <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(it.type)} · ${escapeHtml(it.weight || '')} · ${escapeHtml(it.cost || '')}</div>
     ${it.acBonus ? `<div style="margin-bottom:8px">🛡 Бонус к КД при экипировке: +${it.acBonus}</div>` : ''}
     <div style="white-space:pre-wrap">${escapeHtml(it.properties || '')}</div>
@@ -1050,7 +1074,7 @@ function openItemDetail(id) {
 function openItemForm(existing) {
   const it = existing || { id: uid('i'), name: '', type: '', weight: '', cost: '', properties: '', acBonus: 0, atkBonus: 0, avatar: '', custom: true };
   openModal(existing ? 'Редактировать предмет' : 'Новый предмет', `
-    <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('itAvatar', it, defaultItemEmoji(it.type))}</div>
+    <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('itAvatar', it, defaultItemEmoji(it.type), true)}</div>
     <label>Название</label><input id="itName" value="${escapeAttr(it.name)}">
     <label>Тип</label><input id="itType" value="${escapeAttr(it.type)}" placeholder="Оружие / Броня / Снаряжение">
     <div class="row">
