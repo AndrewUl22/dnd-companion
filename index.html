@@ -14,19 +14,13 @@
 
 <!-- ===== SPLASH SCREEN ===== -->
 <div id="splash" class="splash">
-  <svg id="splashSvg" viewBox="0 0 200 200" width="140" height="140">
-    <circle cx="100" cy="100" r="96" fill="#181426" stroke="#d4af6e" stroke-width="3"/>
-    <circle cx="100" cy="100" r="80" fill="#2d1a4a"/>
-    <g id="petalGroup">
-      <polygon class="petal" data-i="0" points="100,100 100,36 155,68" fill="#d4af6e" stroke="#181426" stroke-width="2"/>
-      <polygon class="petal" data-i="1" points="100,100 155,68 155,132" fill="#e0bd82" stroke="#181426" stroke-width="2"/>
-      <polygon class="petal" data-i="2" points="100,100 155,132 100,164" fill="#d4af6e" stroke="#181426" stroke-width="2"/>
-      <polygon class="petal" data-i="3" points="100,100 100,164 45,132" fill="#c49b5c" stroke="#181426" stroke-width="2"/>
-      <polygon class="petal" data-i="4" points="100,100 45,132 45,68" fill="#d4af6e" stroke="#181426" stroke-width="2"/>
-      <polygon class="petal" data-i="5" points="100,100 45,68 100,36" fill="#e0bd82" stroke="#181426" stroke-width="2"/>
-    </g>
-  </svg>
-  <div class="splash-title">DnD Companion</div>
+  <div class="splash-icon-wrap">
+    <div class="splash-sparkle s1">✦</div>
+    <div class="splash-sparkle s2">✧</div>
+    <div class="splash-sparkle s3">✦</div>
+    <img id="splashIcon" class="splash-icon" src="icons/icon-splash.png" alt="DnD Companion">
+    <div class="splash-glow"></div>
+  </div>
 </div>
 
 <header class="topbar">
@@ -338,7 +332,20 @@
   </div>
 </div>
 
+<!-- Отдельный оверлей для выбора аватарки — не пересекается с формой под ним,
+     чтобы при выборе фото форма (например, "новый предмет") не терялась -->
+<div class="modal-backdrop hidden" id="avatarModalBackdrop" style="z-index:1100">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="avatarModalTitle">Выберите иконку</span>
+      <button class="close-x" id="avatarModalClose">✕</button>
+    </div>
+    <div id="avatarModalBody"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
+
 
 <script src="js/data.js"></script>
 <script src="js/sounds.js"></script>

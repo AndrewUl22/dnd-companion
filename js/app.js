@@ -108,6 +108,18 @@ function closeModal() { modalBackdrop.classList.add('hidden'); }
 document.getElementById('modalClose').addEventListener('click', closeModal);
 modalBackdrop.addEventListener('click', (e) => { if (e.target === modalBackdrop) closeModal(); });
 
+// Отдельный, независимый оверлей для выбора аватарки — открывается ПОВЕРХ формы,
+// не уничтожая её (иначе, например, форма "новый предмет" терялась при выборе фото)
+const avatarModalBackdrop = document.getElementById('avatarModalBackdrop');
+function openAvatarModal(title, bodyHtml) {
+  document.getElementById('avatarModalTitle').textContent = title;
+  document.getElementById('avatarModalBody').innerHTML = bodyHtml;
+  avatarModalBackdrop.classList.remove('hidden');
+}
+function closeAvatarModal() { avatarModalBackdrop.classList.add('hidden'); }
+document.getElementById('avatarModalClose').addEventListener('click', closeAvatarModal);
+avatarModalBackdrop.addEventListener('click', (e) => { if (e.target === avatarModalBackdrop) closeAvatarModal(); });
+
 // ==================== AVATAR PICKER ====================
 // Аватар может быть либо эмодзи (record.avatar), либо загруженной картинкой (record.avatarImage, dataURL).
 // Картинка, если есть, имеет приоритет над эмодзи.
@@ -141,7 +153,7 @@ function bindAvatarPicker(btnId, recordOrGetter, fallbackEmoji, onChange) {
   btn.addEventListener('click', () => {
     const record = getRecord();
     const grid = EMOJI_PALETTE.map(e => `<button type="button" class="emoji-choice" data-e="${e}">${e}</button>`).join('');
-    openModal('Выберите иконку', `
+    openAvatarModal('Выберите иконку', `
       <button class="primary block" id="uploadPhotoBtn">📷 Загрузить фото (PNG/JPG)</button>
       <input type="file" id="uploadPhotoInput" accept="image/*" style="display:none">
       ${record && record.avatarImage ? '<button class="secondary block" id="removePhotoBtn">Убрать фото, вернуть эмодзи</button>' : ''}
@@ -160,7 +172,7 @@ function bindAvatarPicker(btnId, recordOrGetter, fallbackEmoji, onChange) {
         rec.avatarImage = dataUrl;
         btn.innerHTML = avatarInnerHtml(rec, fallbackEmoji);
         onChange(rec);
-        closeModal();
+        closeAvatarModal();
         showToast('Фото добавлено');
       });
     });
@@ -170,7 +182,7 @@ function bindAvatarPicker(btnId, recordOrGetter, fallbackEmoji, onChange) {
       rec.avatarImage = null;
       btn.innerHTML = avatarInnerHtml(rec, fallbackEmoji);
       onChange(rec);
-      closeModal();
+      closeAvatarModal();
     });
     document.querySelectorAll('.emoji-choice').forEach(b => {
       b.addEventListener('click', () => {
@@ -179,7 +191,7 @@ function bindAvatarPicker(btnId, recordOrGetter, fallbackEmoji, onChange) {
         rec.avatarImage = null;
         btn.innerHTML = avatarInnerHtml(rec, fallbackEmoji);
         onChange(rec);
-        closeModal();
+        closeAvatarModal();
       });
     });
     document.getElementById('customEmojiConfirm').addEventListener('click', () => {
@@ -190,7 +202,7 @@ function bindAvatarPicker(btnId, recordOrGetter, fallbackEmoji, onChange) {
       rec.avatarImage = null;
       btn.innerHTML = avatarInnerHtml(rec, fallbackEmoji);
       onChange(rec);
-      closeModal();
+      closeAvatarModal();
     });
   });
 }
@@ -1285,12 +1297,12 @@ function escapeAttr(str) { return escapeHtml(str); }
   // самих браузеров, а не приложения.
   try {
     const ctx = getAudioCtx();
-    if (ctx.state === 'running') playSplashChime();
+    if (ctx.state === 'running') playSplashDiceLand();
   } catch (e) { /* тихо игнорируем */ }
   setTimeout(() => {
     splash.classList.add('fade-out');
     setTimeout(() => splash.remove(), 550);
-  }, 1900);
+  }, 2100);
   // На случай первого тапа — "разбудить" звук на будущее
   document.addEventListener('pointerdown', function unlockAudioOnce() {
     try { getAudioCtx(); } catch (e) {}

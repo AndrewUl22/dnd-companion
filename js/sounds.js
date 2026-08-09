@@ -118,6 +118,65 @@ function playSplashChime() {
     });
   } catch (e) { /* игнорируем */ }
 }
+
+// Полная озвучка заставки: кубик катится и стучит, глухо приземляется,
+// затем магический перезвон под мерцание искр — синхронизировано с CSS-анимацией.
+function playSplashDiceLand() {
+  if (!soundsEnabled()) return;
+  try {
+    const ctx = getAudioCtx();
+    const now = ctx.currentTime;
+
+    // Фаза 1: быстрые затухающие стуки (кубик катится и замедляется)
+    const clatterTimes = [0, 0.09, 0.16, 0.22, 0.27, 0.31, 0.34];
+    clatterTimes.forEach((dt, i) => {
+      const t = now + dt;
+      const bufferSize = ctx.sampleRate * 0.025;
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let j = 0; j < bufferSize; j++) data[j] = (Math.random() * 2 - 1) * (1 - j / bufferSize);
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.16 * (1 - i / clatterTimes.length), t);
+      src.connect(gain);
+      gain.connect(ctx.destination);
+      src.start(t);
+    });
+
+    // Фаза 2: глухой "приземляющий" удар
+    const landT = now + 0.4;
+    const thud = ctx.createOscillator();
+    thud.type = 'sine';
+    thud.frequency.setValueAtTime(140, landT);
+    thud.frequency.exponentialRampToValueAtTime(50, landT + 0.18);
+    const thudGain = ctx.createGain();
+    thudGain.gain.setValueAtTime(0.25, landT);
+    thudGain.gain.exponentialRampToValueAtTime(0.001, landT + 0.3);
+    thud.connect(thudGain);
+    thudGain.connect(ctx.destination);
+    thud.start(landT);
+    thud.stop(landT + 0.32);
+
+    // Фаза 3: магический перезвон под появление искр
+    const chimeStart = now + 0.55;
+    const notes = [659.25, 783.99, 1046.5, 1318.5];
+    notes.forEach((freq, i) => {
+      const t = chimeStart + i * 0.14;
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(0.06, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.85);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.9);
+    });
+  } catch (e) { /* игнорируем */ }
+}
 // Мягкий "лист бумаги": используется при открытии карточек
 function playPageTurn() {
   if (!soundsEnabled()) return;
