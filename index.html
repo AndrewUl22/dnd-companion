@@ -72,12 +72,34 @@
       </div>
       <div class="row">
         <div>
+          <label>Подкласс</label>
+          <input id="sheetSubclass" placeholder="Например, Чемпион">
+        </div>
+        <div>
           <label>Уровень</label>
           <input id="sheetLevel" type="number" min="1" max="20" value="1">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Опыт (ОП)</label>
+          <input id="sheetXP" type="number" value="0">
         </div>
         <div>
           <label>Предыстория</label>
           <input id="sheetBackground" placeholder="Например, Солдат">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Мировоззрение</label>
+          <input id="sheetAlignment" placeholder="Например, Нейтральный добрый">
+        </div>
+        <div>
+          <label>Размер</label>
+          <select id="sheetSize">
+            <option>Крошечный</option><option>Маленький</option><option selected>Средний</option><option>Большой</option><option>Огромный</option>
+          </select>
         </div>
       </div>
     </div>
@@ -86,7 +108,7 @@
     <div class="ability-grid" id="abilityGrid"></div>
 
     <div class="card">
-      <h3>Здоровье и защита</h3>
+      <h3>Боевые параметры</h3>
       <div class="row">
         <div>
           <label>Базовый КД</label>
@@ -102,6 +124,24 @@
         </div>
       </div>
       <div class="meta" style="margin:-6px 0 10px">Итоговый КД (с учётом экипировки): <b id="totalACDisplay" style="color:var(--accent)">10</b></div>
+      <div class="row">
+        <div class="ability-box" style="padding:10px">
+          <div class="label">Инициатива</div>
+          <div class="score" id="initiativeDisplay">+0</div>
+        </div>
+        <div class="ability-box" style="padding:10px">
+          <div class="label">Пасс. восприятие</div>
+          <div class="score" id="passivePerceptionDisplay">10</div>
+        </div>
+        <div class="ability-box" style="padding:10px">
+          <label style="display:block;margin-bottom:4px">Вдохновение</label>
+          <input type="checkbox" id="sheetInspiration" style="width:22px;height:22px;margin:0">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Хиты и кости здоровья</h3>
       <label>Хиты (текущие / максимум / временные)</label>
       <div class="hp-track">
         <input id="hpCurrent" type="number" value="10">
@@ -110,6 +150,32 @@
         <span>+</span>
         <input id="hpTemp" type="number" value="0">
       </div>
+      <div class="row">
+        <div>
+          <label>Кости здоровья (всего)</label>
+          <input id="sheetHitDiceTotal" placeholder="Например, 3к8">
+        </div>
+        <div>
+          <label>Потрачено костей</label>
+          <input id="sheetHitDiceUsed" type="number" value="0">
+        </div>
+      </div>
+      <label style="margin-top:6px">Спасброски от смерти</label>
+      <div class="row">
+        <div>
+          <div class="meta" style="margin-bottom:4px">Успехи</div>
+          <div class="row" id="deathSuccessRow" style="gap:6px"></div>
+        </div>
+        <div>
+          <div class="meta" style="margin-bottom:4px">Провалы</div>
+          <div class="row" id="deathFailRow" style="gap:6px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Спасброски</h3>
+      <div id="savesList"></div>
     </div>
 
     <div class="card">
@@ -118,21 +184,71 @@
     </div>
 
     <div class="card">
+      <h3>Владения</h3>
+      <label>Доспехи</label>
+      <div class="chip-row" id="armorProfChips"></div>
+      <label>Оружие</label>
+      <input id="sheetWeaponProf" placeholder="Например, простое, воинское">
+      <label>Инструменты</label>
+      <input id="sheetToolProf" placeholder="Например, воровские инструменты">
+      <label>Языки</label>
+      <input id="sheetLanguages" placeholder="Например, Общий, Эльфийский">
+    </div>
+
+    <div class="card">
+      <h3>Атаки и боевые заговоры</h3>
+      <div class="meta" id="equipAtkBonusDisplay" style="margin-bottom:6px;color:var(--accent)"></div>
+      <div id="attacksList"></div>
+      <button class="secondary block" id="addAttackBtn">+ Добавить атаку</button>
+    </div>
+
+    <div class="card">
+      <h3>Классовые умения <button type="button" class="expand-btn" data-target="sheetClassFeatures">⤢ Развернуть</button></h3>
+      <textarea id="sheetClassFeatures" placeholder="Умения класса, полученные на текущем уровне"></textarea>
+    </div>
+
+    <div class="card">
+      <h3>Расовые особенности <button type="button" class="expand-btn" data-target="sheetRacialTraits">⤢ Развернуть</button></h3>
+      <textarea id="sheetRacialTraits" placeholder="Особенности расы"></textarea>
+    </div>
+
+    <div class="card">
+      <h3>Черты <button type="button" class="expand-btn" data-target="sheetFeats">⤢ Развернуть</button></h3>
+      <textarea id="sheetFeats" placeholder="Черты персонажа"></textarea>
+    </div>
+
+    <div class="card">
       <h3>Инвентарь</h3>
       <div id="sheetInventory"></div>
       <button class="secondary block" id="addInvFromCatalog">+ Добавить предмет из каталога</button>
+      <label style="margin-top:10px">Кошелёк</label>
+      <div class="row" id="currencyRow">
+        <div><label>ММ</label><input id="cCp" type="number" value="0"></div>
+        <div><label>СМ</label><input id="cSp" type="number" value="0"></div>
+        <div><label>ЭМ</label><input id="cEp" type="number" value="0"></div>
+        <div><label>ЗМ</label><input id="cGp" type="number" value="0"></div>
+        <div><label>ПМ</label><input id="cPp" type="number" value="0"></div>
+      </div>
     </div>
 
     <div class="card">
       <h3>Заклинания</h3>
       <div id="sheetSpellsKnown"></div>
       <button class="secondary block" id="addSpellFromCatalog">+ Добавить заклинание из каталога</button>
-      <label style="margin-top:8px">Способности класса, прочие заметки о магии</label>
+      <label style="margin-top:8px;display:flex;justify-content:space-between;align-items:center">Способности класса, прочие заметки о магии <button type="button" class="expand-btn" data-target="sheetSpells">⤢</button></label>
       <textarea id="sheetSpells" placeholder="Способности класса, заговоры по расе и т.п."></textarea>
     </div>
 
     <div class="card">
-      <h3>Заметки, снаряжение, история</h3>
+      <h3>Внешность и предыстория</h3>
+      <label style="display:flex;justify-content:space-between;align-items:center">Внешность <button type="button" class="expand-btn" data-target="sheetAppearance">⤢</button></label>
+      <textarea id="sheetAppearance" placeholder="Как выглядит персонаж"></textarea>
+      <label style="display:flex;justify-content:space-between;align-items:center">Предыстория и личность <button type="button" class="expand-btn" data-target="sheetBackstory">⤢</button></label>
+      <textarea id="sheetBackstory" placeholder="История персонажа, черты характера, идеалы, узы, слабости"></textarea>
+    </div>
+
+    <div class="card">
+      <h3>Заметки <button type="button" class="expand-btn" data-target="sheetNotes">⤢ Развернуть</button></h3>
       <textarea id="sheetNotes" placeholder="Свободные заметки"></textarea>
     </div>
   </section>

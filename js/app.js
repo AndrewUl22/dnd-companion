@@ -108,35 +108,87 @@ document.getElementById('modalClose').addEventListener('click', closeModal);
 modalBackdrop.addEventListener('click', (e) => { if (e.target === modalBackdrop) closeModal(); });
 
 // ==================== AVATAR PICKER ====================
-function avatarPickerHtml(id, current) {
-  return `
-    <button type="button" class="avatar-circle" id="${id}" data-current="${escapeAttr(current || '🧙')}">${current || '🧙'}</button>
-  `;
+// Аватар может быть либо эмодзи (record.avatar), либо загруженной картинкой (record.avatarImage, dataURL).
+// Картинка, если есть, имеет приоритет над эмодзи.
+function avatarInnerHtml(record, fallbackEmoji) {
+  if (record && record.avatarImage) return `<img src="${record.avatarImage}" alt="">`;
+  return escapeHtml((record && record.avatar) || fallbackEmoji || '🧙');
 }
-function bindAvatarPicker(btnId, onChange) {
+function avatarPickerHtml(id, record, fallbackEmoji) {
+  return `<button type="button" class="avatar-circle" id="${id}">${avatarInnerHtml(record, fallbackEmoji)}</button>`;
+}
+function resizeImageFile(file, maxDim, cb) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if (w > h && w > maxDim) { h = Math.round(h * maxDim / w); w = maxDim; }
+      else if (h > maxDim) { w = Math.round(w * maxDim / h); h = maxDim; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      cb(canvas.toDataURL('image/jpeg', 0.82));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function bindAvatarPicker(btnId, recordOrGetter, fallbackEmoji, onChange) {
   const btn = document.getElementById(btnId);
+  const getRecord = () => (typeof recordOrGetter === 'function') ? recordOrGetter() : recordOrGetter;
   btn.addEventListener('click', () => {
+    const record = getRecord();
     const grid = EMOJI_PALETTE.map(e => `<button type="button" class="emoji-choice" data-e="${e}">${e}</button>`).join('');
     openModal('Выберите иконку', `
+      <button class="primary block" id="uploadPhotoBtn">📷 Загрузить фото (PNG/JPG)</button>
+      <input type="file" id="uploadPhotoInput" accept="image/*" style="display:none">
+      ${record && record.avatarImage ? '<button class="secondary block" id="removePhotoBtn">Убрать фото, вернуть эмодзи</button>' : ''}
+      <div class="section-title" style="margin-top:10px">Или выберите эмодзи</div>
       <div class="emoji-grid">${grid}</div>
       <label style="margin-top:10px">Или впишите свой символ/эмодзи</label>
       <input id="customEmojiInput" maxlength="4" placeholder="🐲">
       <button class="primary block" id="customEmojiConfirm">Использовать</button>
     `);
+    document.getElementById('uploadPhotoBtn').addEventListener('click', () => document.getElementById('uploadPhotoInput').click());
+    document.getElementById('uploadPhotoInput').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      resizeImageFile(file, 300, (dataUrl) => {
+        const rec = getRecord();
+        rec.avatarImage = dataUrl;
+        btn.innerHTML = avatarInnerHtml(rec, fallbackEmoji);
+        onChange(rec);
+        closeModal();
+        showToast('Фото добавлено');
+      });
+    });
+    const removeBtn = document.getElementById('removePhotoBtn');
+    if (removeBtn) removeBtn.addEventListener('click', () => {
+      const rec = getRecord();
+      rec.avatarImage = null;
+      btn.innerHTML = avatarInnerHtml(rec, fallbackEmoji);
+      onChange(rec);
+      closeModal();
+    });
     document.querySelectorAll('.emoji-choice').forEach(b => {
       b.addEventListener('click', () => {
-        btn.textContent = b.dataset.e;
-        btn.dataset.current = b.dataset.e;
-        onChange(b.dataset.e);
+        const rec = getRecord();
+        rec.avatar = b.dataset.e;
+        rec.avatarImage = null;
+        btn.innerHTML = avatarInnerHtml(rec, fallbackEmoji);
+        onChange(rec);
         closeModal();
       });
     });
     document.getElementById('customEmojiConfirm').addEventListener('click', () => {
       const val = document.getElementById('customEmojiInput').value.trim();
       if (!val) return;
-      btn.textContent = val;
-      btn.dataset.current = val;
-      onChange(val);
+      const rec = getRecord();
+      rec.avatar = val;
+      rec.avatarImage = null;
+      btn.innerHTML = avatarInnerHtml(rec, fallbackEmoji);
+      onChange(rec);
       closeModal();
     });
   });
@@ -170,11 +222,26 @@ function newCharacter(name) {
     avatar: '🧙',
     race: DEFAULT_RACES[0],
     class: DEFAULT_CLASSES[0],
+    subclass: '',
     level: 1,
+    xp: 0,
     background: '',
+    alignment: '',
+    size: 'Средний',
+    inspiration: false,
     abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
     ac: 10, speed: '30 фт', prof: 2,
     hp: { current: 10, max: 10, temp: 0 },
+    hitDice: { total: '1к8', used: 0 },
+    deathSaves: { successes: 0, failures: 0 },
+    saveProf: { str: false, dex: false, con: false, int: false, wis: false, cha: false },
+    skillProf: {},
+    armorProf: { light: false, medium: false, heavy: false, shield: false },
+    weaponProf: '', toolProf: '', languages: '',
+    attacks: [],
+    classFeatures: '', racialTraits: '', feats: '',
+    appearance: '', backstory: '',
+    currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
     inventory: [],
     knownSpells: [],
     spells: '',
@@ -209,7 +276,7 @@ function renderCharList() {
     el.className = 'list-item';
     el.innerHTML = `
       <div class="row" style="align-items:center;flex:none;gap:10px">
-        <div class="avatar-circle small">${c.avatar || '🧙'}</div>
+        <div class="avatar-circle small">${avatarInnerHtml(c, '🧙')}</div>
       </div>
       <div style="flex:1">
         <div>${escapeHtml(c.name)}</div>
@@ -222,34 +289,91 @@ function renderCharList() {
   });
 }
 
+function migrateChar(c) {
+  if (!c.subclass) c.subclass = c.subclass || '';
+  if (c.xp === undefined) c.xp = 0;
+  if (!c.alignment) c.alignment = c.alignment || '';
+  if (!c.size) c.size = 'Средний';
+  if (c.inspiration === undefined) c.inspiration = false;
+  if (!c.hitDice) c.hitDice = { total: '', used: 0 };
+  if (!c.deathSaves) c.deathSaves = { successes: 0, failures: 0 };
+  if (!c.saveProf) c.saveProf = { str: false, dex: false, con: false, int: false, wis: false, cha: false };
+  if (!c.skillProf) c.skillProf = {};
+  if (!c.armorProf) c.armorProf = { light: false, medium: false, heavy: false, shield: false };
+  if (c.weaponProf === undefined) c.weaponProf = '';
+  if (c.toolProf === undefined) c.toolProf = '';
+  if (c.languages === undefined) c.languages = '';
+  if (!c.attacks) c.attacks = [];
+  if (c.classFeatures === undefined) c.classFeatures = '';
+  if (c.racialTraits === undefined) c.racialTraits = '';
+  if (c.feats === undefined) c.feats = '';
+  if (c.appearance === undefined) c.appearance = '';
+  if (c.backstory === undefined) c.backstory = '';
+  if (!c.currency) c.currency = { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 };
+  return c;
+}
+
 function openCharacter(id) {
   currentCharId = id;
-  const c = getChar(id);
+  const c = migrateChar(getChar(id));
   if (!c.avatar) c.avatar = '🧙';
   document.getElementById('sheetName').value = c.name;
-  document.getElementById('sheetAvatar').textContent = c.avatar;
-  document.getElementById('sheetAvatar').dataset.current = c.avatar;
+  document.getElementById('sheetAvatar').innerHTML = avatarInnerHtml(c, '🧙');
   populateRaceClassOptions();
   document.getElementById('sheetRace').value = c.race;
   document.getElementById('sheetClass').value = c.class;
+  document.getElementById('sheetSubclass').value = c.subclass;
   document.getElementById('sheetLevel').value = c.level;
+  document.getElementById('sheetXP').value = c.xp;
   document.getElementById('sheetBackground').value = c.background;
+  document.getElementById('sheetAlignment').value = c.alignment;
+  document.getElementById('sheetSize').value = c.size;
   document.getElementById('sheetAC').value = c.ac;
   document.getElementById('sheetSpeed').value = c.speed;
   document.getElementById('sheetProf').value = c.prof;
+  document.getElementById('sheetInspiration').checked = c.inspiration;
   document.getElementById('hpCurrent').value = c.hp.current;
   document.getElementById('hpMax').value = c.hp.max;
   document.getElementById('hpTemp').value = c.hp.temp;
+  document.getElementById('sheetHitDiceTotal').value = c.hitDice.total;
+  document.getElementById('sheetHitDiceUsed').value = c.hitDice.used;
+  document.getElementById('sheetWeaponProf').value = c.weaponProf;
+  document.getElementById('sheetToolProf').value = c.toolProf;
+  document.getElementById('sheetLanguages').value = c.languages;
+  document.getElementById('sheetClassFeatures').value = c.classFeatures;
+  document.getElementById('sheetRacialTraits').value = c.racialTraits;
+  document.getElementById('sheetFeats').value = c.feats;
+  document.getElementById('sheetAppearance').value = c.appearance;
+  document.getElementById('sheetBackstory').value = c.backstory;
   document.getElementById('sheetSpells').value = c.spells;
   document.getElementById('sheetNotes').value = c.notes;
+  document.getElementById('cCp').value = c.currency.cp;
+  document.getElementById('cSp').value = c.currency.sp;
+  document.getElementById('cEp').value = c.currency.ep;
+  document.getElementById('cGp').value = c.currency.gp;
+  document.getElementById('cPp').value = c.currency.pp;
 
   renderAbilityGrid(c);
+  renderSaves(c);
   renderSkills(c);
+  renderArmorProfChips(c);
+  renderDeathSaves(c);
+  renderAttacks(c);
   renderInventory(c);
   renderCharSpells(c);
   updateTotalAC(c);
+  updateComputedStats(c);
   switchView('sheet');
   playDoorCreak();
+}
+
+function updateComputedStats(c) {
+  const initEl = document.getElementById('initiativeDisplay');
+  if (initEl) initEl.textContent = fmtMod(mod(c.abilities.dex));
+  const perc = SKILL_LIST.find(s => s.name === 'Восприятие');
+  const passive = 10 + mod(c.abilities[perc.ability]) + (c.skillProf['Восприятие'] ? (parseInt(c.prof) || 0) : 0);
+  const passEl = document.getElementById('passivePerceptionDisplay');
+  if (passEl) passEl.textContent = passive;
 }
 
 function populateRaceClassOptions() {
@@ -283,16 +407,132 @@ function renderAbilityGrid(c) {
       box.querySelector('.score').textContent = c.abilities[key];
       box.querySelector('.mod').textContent = fmtMod(mod(c.abilities[key]));
       renderSkills(c);
+      renderSaves(c);
+      updateComputedStats(c);
     });
+  });
+}
+
+function renderSaves(c) {
+  const wrap = document.getElementById('savesList');
+  const labels = { str: 'Сила', dex: 'Ловкость', con: 'Телосложение', int: 'Интеллект', wis: 'Мудрость', cha: 'Харизма' };
+  wrap.innerHTML = Object.keys(labels).map(k => {
+    const prof = !!c.saveProf[k];
+    const total = mod(c.abilities[k]) + (prof ? (parseInt(c.prof) || 0) : 0);
+    return `<div class="skill-row"><span><input type="checkbox" data-save="${k}" ${prof ? 'checked' : ''} style="width:auto;margin-right:6px;vertical-align:middle">${labels[k]}</span><span class="mod">${fmtMod(total)}</span></div>`;
+  }).join('');
+  wrap.querySelectorAll('input[data-save]').forEach(chk => {
+    chk.addEventListener('change', () => {
+      const c = getChar(currentCharId);
+      c.saveProf[chk.dataset.save] = chk.checked;
+      saveState();
+      renderSaves(c);
+    });
+  });
+}
+
+function renderArmorProfChips(c) {
+  const wrap = document.getElementById('armorProfChips');
+  const labels = { light: 'Лёгкие', medium: 'Средние', heavy: 'Тяжёлые', shield: 'Щит' };
+  wrap.innerHTML = Object.keys(labels).map(k => `<button type="button" class="chip ${c.armorProf[k] ? 'active' : ''}" data-a="${k}">${labels[k]}</button>`).join('');
+  wrap.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const c = getChar(currentCharId);
+      c.armorProf[chip.dataset.a] = !c.armorProf[chip.dataset.a];
+      saveState();
+      renderArmorProfChips(c);
+    });
+  });
+}
+
+function renderDeathSaves(c) {
+  const succWrap = document.getElementById('deathSuccessRow');
+  const failWrap = document.getElementById('deathFailRow');
+  succWrap.innerHTML = [1, 2, 3].map(i => `<button type="button" class="death-dot ${c.deathSaves.successes >= i ? 'filled success' : ''}" data-type="s" data-n="${i}"></button>`).join('');
+  failWrap.innerHTML = [1, 2, 3].map(i => `<button type="button" class="death-dot ${c.deathSaves.failures >= i ? 'filled fail' : ''}" data-type="f" data-n="${i}"></button>`).join('');
+  [...succWrap.querySelectorAll('.death-dot'), ...failWrap.querySelectorAll('.death-dot')].forEach(btn => {
+    btn.addEventListener('click', () => {
+      const c = getChar(currentCharId);
+      const n = parseInt(btn.dataset.n);
+      const key = btn.dataset.type === 's' ? 'successes' : 'failures';
+      c.deathSaves[key] = (c.deathSaves[key] === n) ? n - 1 : n;
+      saveState();
+      renderDeathSaves(c);
+    });
+  });
+}
+
+// ==================== ATTACKS ====================
+function renderAttacks(c) {
+  const wrap = document.getElementById('attacksList');
+  if (!c.attacks.length) {
+    wrap.innerHTML = '<div class="empty-state" style="padding:16px 0">Атаки не добавлены</div>';
+    return;
+  }
+  wrap.innerHTML = c.attacks.map((a, idx) => `
+    <div class="inv-item" data-idx="${idx}">
+      <div>
+        <div>${escapeHtml(a.name)}</div>
+        <div class="meta" style="color:var(--text-dim);font-size:11px">Бонус ${escapeHtml(a.bonus)} · ${escapeHtml(a.damage)}${a.notes ? ' · ' + escapeHtml(a.notes) : ''}</div>
+      </div>
+      <div class="row" style="flex:none;gap:4px">
+        <button data-idx="${idx}" data-act="edit" class="secondary" style="padding:5px 8px;font-size:11px">✎</button>
+        <button data-idx="${idx}" data-act="del">✕</button>
+      </div>
+    </div>
+  `).join('');
+  wrap.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const c = getChar(currentCharId);
+      const idx = parseInt(btn.dataset.idx);
+      if (btn.dataset.act === 'del') { c.attacks.splice(idx, 1); saveState(); renderAttacks(c); playChainClink(); }
+      if (btn.dataset.act === 'edit') openAttackForm(c, idx);
+    });
+  });
+}
+
+document.getElementById('addAttackBtn').addEventListener('click', () => openAttackForm(getChar(currentCharId)));
+
+function openAttackForm(c, idx) {
+  const existing = idx !== undefined ? c.attacks[idx] : null;
+  const a = existing || { name: '', bonus: '+0', damage: '', notes: '' };
+  openModal(existing ? 'Редактировать атаку' : 'Новая атака', `
+    <label>Название</label><input id="atkName" value="${escapeAttr(a.name)}" placeholder="Длинный меч">
+    <label>Бонус атаки/СЛ</label><input id="atkBonus" value="${escapeAttr(a.bonus)}" placeholder="+5">
+    <label>Урон и эффект</label><input id="atkDamage" value="${escapeAttr(a.damage)}" placeholder="1к8+3 рубящего">
+    <label>Заметки</label><input id="atkNotes" value="${escapeAttr(a.notes)}">
+    <button class="primary block" id="saveAttack">Сохранить</button>
+  `);
+  document.getElementById('saveAttack').addEventListener('click', () => {
+    const newA = {
+      name: document.getElementById('atkName').value.trim() || 'Атака',
+      bonus: document.getElementById('atkBonus').value.trim(),
+      damage: document.getElementById('atkDamage').value.trim(),
+      notes: document.getElementById('atkNotes').value.trim()
+    };
+    if (existing) c.attacks[idx] = newA; else c.attacks.push(newA);
+    saveState();
+    closeModal();
+    renderAttacks(c);
   });
 }
 
 function renderSkills(c) {
   const list = document.getElementById('skillsList');
   list.innerHTML = SKILL_LIST.map(s => {
-    const m = mod(c.abilities[s.ability]) + Math.floor((c.prof || 0) * 0); // base, proficiency toggled manually not tracked per-skill in MVP
-    return `<div class="skill-row"><span>${s.name}</span><span class="mod">${fmtMod(mod(c.abilities[s.ability]))}</span></div>`;
+    const prof = !!c.skillProf[s.name];
+    const total = mod(c.abilities[s.ability]) + (prof ? (parseInt(c.prof) || 0) : 0);
+    return `<div class="skill-row"><span><input type="checkbox" data-skill="${escapeAttr(s.name)}" ${prof ? 'checked' : ''} style="width:auto;margin-right:6px;vertical-align:middle">${s.name} <span style="color:var(--text-dim);font-size:11px">(${s.ability})</span></span><span class="mod">${fmtMod(total)}</span></div>`;
   }).join('');
+  list.querySelectorAll('input[data-skill]').forEach(chk => {
+    chk.addEventListener('change', () => {
+      const c = getChar(currentCharId);
+      c.skillProf[chk.dataset.skill] = chk.checked;
+      saveState();
+      renderSkills(c);
+      updateComputedStats(c);
+    });
+  });
 }
 
 function renderInventory(c) {
@@ -303,15 +543,18 @@ function renderInventory(c) {
     return;
   }
   wrap.innerHTML = c.inventory.map((it, idx) => {
-    const canEquip = !!it.acBonus;
+    const canEquip = !!it.acBonus || !!it.atkBonus;
+    const bonusParts = [];
+    if (it.acBonus) bonusParts.push('КД +' + it.acBonus);
+    if (it.atkBonus) bonusParts.push('Атака +' + it.atkBonus);
     return `
     <div class="inv-item">
       <div>
         <div>${escapeHtml(it.name)} ${it.equipped ? '✅' : ''}</div>
-        <div class="meta" style="color:var(--text-dim);font-size:11px">${escapeHtml(it.type || '')}${canEquip ? ' · КД +' + it.acBonus : ''}</div>
+        <div class="meta" style="color:var(--text-dim);font-size:11px">${escapeHtml(it.type || '')}${bonusParts.length ? ' · ' + bonusParts.join(' · ') : ''}</div>
       </div>
       <div class="qty-controls row" style="flex:none;gap:4px;align-items:center">
-        ${canEquip ? `<button data-idx="${idx}" data-act="equip" class="secondary" style="padding:5px 8px;font-size:11px">${it.equipped ? 'Снять' : 'Надеть'}</button>` : ''}
+        ${canEquip ? `<button data-idx="${idx}" data-act="equip" class="equip-btn ${it.equipped ? 'is-on' : ''}" title="${it.equipped ? 'Снять' : 'Надеть'}">${it.equipped ? '✓' : '⭘'}</button>` : ''}
         <button data-idx="${idx}" data-act="dec">−</button>
         <span style="padding:0 6px">${it.qty}</span>
         <button data-idx="${idx}" data-act="inc">+</button>
@@ -336,9 +579,13 @@ function renderInventory(c) {
 }
 
 function updateTotalAC(c) {
-  const bonus = (c.inventory || []).filter(i => i.equipped && i.acBonus).reduce((sum, i) => sum + i.acBonus, 0);
+  const equipped = (c.inventory || []).filter(i => i.equipped);
+  const acBonus = equipped.reduce((sum, i) => sum + (i.acBonus || 0), 0);
+  const atkBonus = equipped.reduce((sum, i) => sum + (i.atkBonus || 0), 0);
   const el = document.getElementById('totalACDisplay');
-  if (el) el.textContent = (parseInt(c.ac) || 0) + bonus;
+  if (el) el.textContent = (parseInt(c.ac) || 0) + acBonus;
+  const atkEl = document.getElementById('equipAtkBonusDisplay');
+  if (atkEl) atkEl.textContent = atkBonus > 0 ? ('Бонус атаки от снаряжения: +' + atkBonus) : '';
 }
 
 document.getElementById('addInvFromCatalog').addEventListener('click', () => {
@@ -353,7 +600,7 @@ document.getElementById('addInvFromCatalog').addEventListener('click', () => {
     const item = state.items.find(i => i.id === document.getElementById('invCatalogSelect').value);
     const existing = c.inventory.find(i => i.itemId === item.id);
     if (existing) existing.qty++;
-    else c.inventory.push({ itemId: item.id, name: item.name, type: item.type, qty: 1, acBonus: item.acBonus || 0, equipped: false });
+    else c.inventory.push({ itemId: item.id, name: item.name, type: item.type, qty: 1, acBonus: item.acBonus || 0, atkBonus: item.atkBonus || 0, equipped: false });
     saveState();
     renderInventory(c);
     closeModal();
@@ -364,16 +611,40 @@ document.getElementById('addInvFromCatalog').addEventListener('click', () => {
 [
   ['sheetName', 'name'], ['sheetLevel', 'level'], ['sheetBackground', 'background'],
   ['sheetAC', 'ac'], ['sheetSpeed', 'speed'], ['sheetProf', 'prof'],
-  ['sheetSpells', 'spells'], ['sheetNotes', 'notes']
+  ['sheetSpells', 'spells'], ['sheetNotes', 'notes'],
+  ['sheetSubclass', 'subclass'], ['sheetXP', 'xp'], ['sheetAlignment', 'alignment'],
+  ['sheetHitDiceTotal', ['hitDice', 'total']], ['sheetHitDiceUsed', ['hitDice', 'used']],
+  ['sheetWeaponProf', 'weaponProf'], ['sheetToolProf', 'toolProf'], ['sheetLanguages', 'languages'],
+  ['sheetClassFeatures', 'classFeatures'], ['sheetRacialTraits', 'racialTraits'], ['sheetFeats', 'feats'],
+  ['sheetAppearance', 'appearance'], ['sheetBackstory', 'backstory']
 ].forEach(([elId, field]) => {
   document.getElementById(elId).addEventListener('input', () => {
     const c = getChar(currentCharId);
     if (!c) return;
     const el = document.getElementById(elId);
-    c[field] = (el.type === 'number') ? (parseInt(el.value) || 0) : el.value;
+    const val = (el.type === 'number') ? (parseInt(el.value) || 0) : el.value;
+    if (Array.isArray(field)) c[field[0]][field[1]] = val;
+    else c[field] = val;
     saveState();
     if (field === 'name') renderCharList();
     if (field === 'ac') updateTotalAC(c);
+    if (field === 'prof') { renderSaves(c); renderSkills(c); updateComputedStats(c); }
+  });
+});
+document.getElementById('sheetSize').addEventListener('change', (e) => {
+  getChar(currentCharId).size = e.target.value;
+  saveState();
+});
+document.getElementById('sheetInspiration').addEventListener('change', (e) => {
+  getChar(currentCharId).inspiration = e.target.checked;
+  saveState();
+});
+['cCp', 'cSp', 'cEp', 'cGp', 'cPp'].forEach((elId) => {
+  const key = elId.slice(1).toLowerCase();
+  document.getElementById(elId).addEventListener('input', () => {
+    const c = getChar(currentCharId);
+    c.currency[key] = parseInt(document.getElementById(elId).value) || 0;
+    saveState();
   });
 });
 document.getElementById('sheetRace').addEventListener('change', (e) => {
@@ -392,9 +663,7 @@ document.getElementById('sheetClass').addEventListener('change', (e) => {
   saveState();
   renderCharList();
 });
-bindAvatarPicker('sheetAvatar', (emoji) => {
-  const c = getChar(currentCharId);
-  c.avatar = emoji;
+bindAvatarPicker('sheetAvatar', () => getChar(currentCharId), '🧙', (record) => {
   saveState();
   renderCharList();
 });
@@ -434,7 +703,7 @@ function renderBestiary() {
   if (!items.length) { list.innerHTML = '<div class="empty-state">Ничего не найдено</div>'; return; }
   list.innerHTML = items.map(b => `
     <div class="list-item" data-id="${b.id}">
-      <div class="avatar-circle small">${b.avatar || defaultBeastEmoji(b.type)}</div>
+      <div class="avatar-circle small">${avatarInnerHtml(b, defaultBeastEmoji(b.type))}</div>
       <div style="flex:1">
         <div>${escapeHtml(b.name)} ${b.custom ? '★' : ''}</div>
         <div class="meta">${escapeHtml(b.type)} · КО ${escapeHtml(b.cr)} · КД ${b.ac} · ХП ${escapeHtml(String(b.hp))}</div>
@@ -454,7 +723,7 @@ function openBestiaryDetail(id) {
   const abRow = ab ? Object.entries(ab).map(([k, v]) => `${k.toUpperCase()} ${v} (${fmtMod(mod(v))})`).join(' · ') : '';
   const editBtn = b.custom ? `<button class="secondary block" id="editBeast">Редактировать</button><button class="danger block" id="deleteBeast">Удалить</button>` : '';
   openModal(b.name, `
-    <div class="avatar-circle" style="margin:0 auto 12px">${b.avatar || defaultBeastEmoji(b.type)}</div>
+    <div class="avatar-circle" style="margin:0 auto 12px">${avatarInnerHtml(b, defaultBeastEmoji(b.type))}</div>
     <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(b.type)} · КО ${escapeHtml(b.cr)}</div>
     <div style="margin-bottom:8px">КД ${b.ac} · ХП ${escapeHtml(String(b.hp))} · Скорость ${escapeHtml(b.speed)}</div>
     <div style="margin-bottom:8px;font-size:13px;color:var(--text-dim)">${abRow}</div>
@@ -478,7 +747,7 @@ function openBestiaryDetail(id) {
 function openBestiaryForm(existing) {
   const b = existing || { id: uid('b'), name: '', type: '', cr: '', ac: 10, hp: '', speed: '30 фт', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, actions: '', description: '', avatar: '', custom: true };
   openModal(existing ? 'Редактировать существо' : 'Новое существо', `
-    <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('bAvatar', b.avatar || defaultBeastEmoji(b.type))}</div>
+    <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('bAvatar', b, defaultBeastEmoji(b.type))}</div>
     <label>Название</label><input id="bName" value="${escapeAttr(b.name)}">
     <label>Тип</label><input id="bType" value="${escapeAttr(b.type)}" placeholder="Например, Гуманоид">
     <div class="row">
@@ -495,7 +764,7 @@ function openBestiaryForm(existing) {
     <label>Действия</label><textarea id="bActions">${escapeHtml(b.actions)}</textarea>
     <button class="primary block" id="saveBeast">Сохранить</button>
   `);
-  bindAvatarPicker('bAvatar', (emoji) => { b.avatar = emoji; });
+  bindAvatarPicker('bAvatar', b, defaultBeastEmoji(b.type), () => {});
   document.getElementById('saveBeast').addEventListener('click', () => {
     b.name = document.getElementById('bName').value.trim() || 'Без имени';
     b.type = document.getElementById('bType').value.trim();
@@ -503,7 +772,7 @@ function openBestiaryForm(existing) {
     b.ac = parseInt(document.getElementById('bAc').value) || 10;
     b.hp = document.getElementById('bHp').value.trim();
     b.speed = document.getElementById('bSpeed').value.trim();
-    b.avatar = document.getElementById('bAvatar').dataset.current || b.avatar;
+    b.avatar = b.avatar || defaultBeastEmoji(document.getElementById('bType').value.trim());
     const nums = document.getElementById('bAbilities').value.trim().split(/\s+/).map(n => parseInt(n) || 10);
     const keys = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
     keys.forEach((k, i) => { b.abilities[k] = nums[i] !== undefined ? nums[i] : 10; });
@@ -741,7 +1010,7 @@ function renderItems() {
   if (!items.length) { list.innerHTML = '<div class="empty-state">Ничего не найдено</div>'; return; }
   list.innerHTML = items.map(it => `
     <div class="list-item" data-id="${it.id}">
-      <div class="avatar-circle small">${it.avatar || defaultItemEmoji(it.type)}</div>
+      <div class="avatar-circle small">${avatarInnerHtml(it, defaultItemEmoji(it.type))}</div>
       <div style="flex:1">
         <div>${escapeHtml(it.name)} ${it.custom ? '★' : ''}</div>
         <div class="meta">${escapeHtml(it.type)} · ${escapeHtml(it.weight || '')}</div>
@@ -759,7 +1028,7 @@ function openItemDetail(id) {
   playPageTurn();
   const editBtn = it.custom ? `<button class="secondary block" id="editItem">Редактировать</button><button class="danger block" id="deleteItem">Удалить</button>` : '';
   openModal(it.name, `
-    <div class="avatar-circle" style="margin:0 auto 12px">${it.avatar || defaultItemEmoji(it.type)}</div>
+    <div class="avatar-circle" style="margin:0 auto 12px">${avatarInnerHtml(it, defaultItemEmoji(it.type))}</div>
     <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(it.type)} · ${escapeHtml(it.weight || '')} · ${escapeHtml(it.cost || '')}</div>
     ${it.acBonus ? `<div style="margin-bottom:8px">🛡 Бонус к КД при экипировке: +${it.acBonus}</div>` : ''}
     <div style="white-space:pre-wrap">${escapeHtml(it.properties || '')}</div>
@@ -779,28 +1048,31 @@ function openItemDetail(id) {
 }
 
 function openItemForm(existing) {
-  const it = existing || { id: uid('i'), name: '', type: '', weight: '', cost: '', properties: '', acBonus: 0, avatar: '', custom: true };
+  const it = existing || { id: uid('i'), name: '', type: '', weight: '', cost: '', properties: '', acBonus: 0, atkBonus: 0, avatar: '', custom: true };
   openModal(existing ? 'Редактировать предмет' : 'Новый предмет', `
-    <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('itAvatar', it.avatar || defaultItemEmoji(it.type))}</div>
+    <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('itAvatar', it, defaultItemEmoji(it.type))}</div>
     <label>Название</label><input id="itName" value="${escapeAttr(it.name)}">
     <label>Тип</label><input id="itType" value="${escapeAttr(it.type)}" placeholder="Оружие / Броня / Снаряжение">
     <div class="row">
       <div><label>Вес</label><input id="itWeight" value="${escapeAttr(it.weight)}"></div>
       <div><label>Цена</label><input id="itCost" value="${escapeAttr(it.cost)}"></div>
     </div>
-    <label>Бонус к КД при экипировке (0, если не влияет)</label>
-    <input id="itAcBonus" type="number" value="${it.acBonus || 0}">
+    <div class="row">
+      <div><label>Бонус к КД (для брони)</label><input id="itAcBonus" type="number" value="${it.acBonus || 0}"></div>
+      <div><label>Бонус к атаке (для оружия)</label><input id="itAtkBonus" type="number" value="${it.atkBonus || 0}"></div>
+    </div>
     <label>Свойства / описание</label><textarea id="itProps">${escapeHtml(it.properties)}</textarea>
     <button class="primary block" id="saveItem">Сохранить</button>
   `);
-  bindAvatarPicker('itAvatar', (emoji) => { it.avatar = emoji; });
+  bindAvatarPicker('itAvatar', it, defaultItemEmoji(it.type), () => {});
   document.getElementById('saveItem').addEventListener('click', () => {
     it.name = document.getElementById('itName').value.trim() || 'Без названия';
     it.type = document.getElementById('itType').value.trim() || 'Снаряжение';
     it.weight = document.getElementById('itWeight').value.trim();
     it.cost = document.getElementById('itCost').value.trim();
     it.acBonus = parseInt(document.getElementById('itAcBonus').value) || 0;
-    it.avatar = document.getElementById('itAvatar').dataset.current || it.avatar;
+    it.atkBonus = parseInt(document.getElementById('itAtkBonus').value) || 0;
+    it.avatar = it.avatar || defaultItemEmoji(document.getElementById('itType').value.trim());
     it.properties = document.getElementById('itProps').value;
     it.custom = true;
     if (!state.items.find(x => x.id === it.id)) state.items.push(it);
@@ -906,35 +1178,71 @@ soundToggle.addEventListener('change', () => {
 // ==================== DICE ROLLER ====================
 const DICE_TYPES = [4, 6, 8, 10, 12, 20, 100];
 let diceHistory = [];
+let selectedDie = 20;
 
 function openDiceRoller() {
   renderDiceModal();
 }
 
 function renderDiceModal() {
-  const buttons = DICE_TYPES.map(d => `<button type="button" class="chip dice-btn" data-d="${d}" style="font-size:15px;padding:12px 16px">d${d}</button>`).join('');
+  const buttons = DICE_TYPES.map(d => `<button type="button" class="chip dice-btn ${d === selectedDie ? 'active' : ''}" data-d="${d}">d${d}</button>`).join('');
   const historyHtml = diceHistory.length
-    ? diceHistory.slice(0, 10).map(h => `<div class="skill-row"><span>d${h.die}</span><span class="mod">${h.result}</span></div>`).join('')
+    ? diceHistory.slice(0, 12).map(h => `<div class="skill-row"><span>${h.label}</span><span class="mod">${h.total}${h.rolls ? ' (' + h.rolls.join('+') + (h.mod ? (h.mod > 0 ? '+' + h.mod : h.mod) : '') + ')' : ''}</span></div>`).join('')
     : '<div class="empty-state" style="padding:10px 0">Пока не было бросков</div>';
   openModal('Кубики', `
     <div class="chip-row" id="diceButtons" style="flex-wrap:wrap">${buttons}</div>
-    <div id="diceResultBig" style="text-align:center;font-size:48px;font-weight:700;color:var(--accent);margin:16px 0">—</div>
+    <div class="row" style="margin-top:8px">
+      <div>
+        <label>Количество костей</label>
+        <input id="diceCount" type="number" min="1" max="20" value="1">
+      </div>
+      <div>
+        <label>Модификатор</label>
+        <input id="diceMod" type="number" value="0">
+      </div>
+    </div>
+    <button class="primary block" id="rollDiceBtn">Бросить</button>
+    <div id="diceResultBig" style="text-align:center;font-size:48px;font-weight:700;color:var(--accent);margin:12px 0">—</div>
     <div class="section-title" style="margin-top:4px">История</div>
     <div id="diceHistoryList">${historyHtml}</div>
   `);
   document.querySelectorAll('.dice-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const die = parseInt(btn.dataset.d);
-      const result = 1 + Math.floor(Math.random() * die);
-      diceHistory.unshift({ die, result });
-      document.getElementById('diceResultBig').textContent = result;
-      document.getElementById('diceHistoryList').innerHTML = diceHistory.slice(0, 10).map(h => `<div class="skill-row"><span>d${h.die}</span><span class="mod">${h.result}</span></div>`).join('');
-      playDiceRoll();
+      selectedDie = parseInt(btn.dataset.d);
+      document.querySelectorAll('.dice-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.d) === selectedDie));
     });
+  });
+  document.getElementById('rollDiceBtn').addEventListener('click', () => {
+    const count = Math.max(1, Math.min(20, parseInt(document.getElementById('diceCount').value) || 1));
+    const modifier = parseInt(document.getElementById('diceMod').value) || 0;
+    const rolls = [];
+    for (let i = 0; i < count; i++) rolls.push(1 + Math.floor(Math.random() * selectedDie));
+    const total = rolls.reduce((a, b) => a + b, 0) + modifier;
+    const label = `${count}к${selectedDie}${modifier ? (modifier > 0 ? '+' + modifier : modifier) : ''}`;
+    diceHistory.unshift({ label, total, rolls, mod: modifier });
+    document.getElementById('diceResultBig').textContent = total;
+    document.getElementById('diceHistoryList').innerHTML = diceHistory.slice(0, 12).map(h => `<div class="skill-row"><span>${h.label}</span><span class="mod">${h.total}${h.rolls.length > 1 || h.mod ? ' (' + h.rolls.join('+') + (h.mod ? (h.mod > 0 ? '+' + h.mod : h.mod) : '') + ')' : ''}</span></div>`).join('');
+    playDiceRoll();
   });
 }
 
 document.getElementById('diceBtn').addEventListener('click', openDiceRoller);
+
+// ==================== EXPANDABLE TEXT EDITOR ====================
+document.querySelectorAll('.expand-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const targetId = btn.dataset.target;
+    const source = document.getElementById(targetId);
+    const label = btn.closest('h3, label').textContent.replace('⤢', '').replace('Развернуть', '').trim() || 'Текст';
+    openModal(label, `<textarea id="expandedTextarea" class="expanded-editor-textarea">${escapeHtml(source.value)}</textarea>`);
+    const expanded = document.getElementById('expandedTextarea');
+    expanded.focus();
+    expanded.addEventListener('input', () => {
+      source.value = expanded.value;
+      source.dispatchEvent(new Event('input'));
+    });
+  });
+});
 
 // ==================== HELPERS ====================
 function escapeHtml(str) {
