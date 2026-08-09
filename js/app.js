@@ -271,10 +271,41 @@ function defaultBeastEmoji(type) {
   if (t.includes('элементал')) return '🔥';
   return '❔';
 }
-function defaultItemEmoji(type) {
-  const t = (type || '').toLowerCase();
-  if (t.includes('оруж')) return '⚔️';
-  if (t.includes('брон') || t.includes('щит')) return '🛡️';
+function defaultItemEmoji(name, type) {
+  const s = ((name || '') + ' ' + (type || '')).toLowerCase();
+  // Сначала — конкретные предметы (точнее общей категории)
+  if (s.includes('зелье') || s.includes('эликсир') || s.includes('снадобье')) return '🧪';
+  if (s.includes('свиток')) return '📜';
+  if (s.includes('верёвк') || s.includes('веревк') || s.includes('канат')) return '🪢';
+  if (s.includes('посох')) return '🪄';
+  if (s.includes('жезл') || s.includes('палочк')) return '🪄';
+  if (s.includes('кольц') || s.includes('перстен')) return '💍';
+  if (s.includes('амулет') || s.includes('медальон') || s.includes('кулон')) return '📿';
+  if (s.includes('книг') || s.includes('гримуар') || s.includes('фолиант')) return '📖';
+  if (s.includes('карт') && !s.includes('картечь')) return '🗺️';
+  if (s.includes('ключ')) return '🗝️';
+  if (s.includes('факел') || s.includes('фонар')) return '🔦';
+  if (s.includes('свеч')) return '🕯️';
+  if (s.includes('стрел') || s.includes('лук')) return '🏹';
+  if (s.includes('арбалет')) return '🏹';
+  if (s.includes('кинжал')) return '🗡️';
+  if (s.includes('меч') || s.includes('клинок') || s.includes('скимитар') || s.includes('рапир')) return '🗡️';
+  if (s.includes('топор') || s.includes('секир')) return '🪓';
+  if (s.includes('молот') || s.includes('булав')) return '🔨';
+  if (s.includes('копь') || s.includes('пик') || s.includes('трезубец')) return '🔱';
+  if (s.includes('щит')) return '🛡️';
+  if (s.includes('шлем') || s.includes('капюшон')) return '⛑️';
+  if (s.includes('плащ') || s.includes('мантия') || s.includes('накидк')) return '🧥';
+  if (s.includes('сапог') || s.includes('ботинк') || s.includes('обувь')) return '👢';
+  if (s.includes('перчатк') || s.includes('рукавиц')) return '🧤';
+  if (s.includes('монет') || s.includes('золот') || s.includes('казна') || s.includes('сокровищ')) return '💰';
+  if (s.includes('еда') || s.includes('паёк') || s.includes('провизия') || s.includes('хлеб') || s.includes('мясо')) return '🍖';
+  if (s.includes('инструмент') || s.includes('набор')) return '🧰';
+  if (s.includes('яд')) return '☠️';
+  if (s.includes('драгоц') || s.includes('самоцвет') || s.includes('алмаз') || s.includes('рубин')) return '💎';
+  // Затем — общие категории
+  if (s.includes('оруж')) return '⚔️';
+  if (s.includes('брон')) return '🛡️';
   return '🎒';
 }
 
@@ -657,7 +688,7 @@ function updateTotalAC(c) {
 document.getElementById('addInvFromCatalog').addEventListener('click', () => {
   const sorted = state.items.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'));
   openListPicker(false, 'Выберите предмет', sorted,
-    (it) => `<div class="avatar-circle small">${avatarInnerHtml(it, defaultItemEmoji(it.type))}</div><div style="flex:1"><div>${escapeHtml(it.name)}</div><div class="meta">${escapeHtml(it.type)}${it.rarity ? ' · ' + escapeHtml(it.rarity) : ''}</div></div><span class="badge">${escapeHtml(it.cost || '')}</span>`,
+    (it) => `<div class="avatar-circle small">${avatarInnerHtml(it, defaultItemEmoji(it.name, it.type))}</div><div style="flex:1"><div>${escapeHtml(it.name)}</div><div class="meta">${escapeHtml(it.type)}${it.rarity ? ' · ' + escapeHtml(it.rarity) : ''}</div></div><span class="badge">${escapeHtml(it.cost || '')}</span>`,
     (item) => {
       const c = getChar(currentCharId);
       const existing = c.inventory.find(i => i.itemId === item.id);
@@ -1192,7 +1223,7 @@ function renderItems() {
   if (!items.length) { list.innerHTML = '<div class="empty-state">Ничего не найдено</div>'; return; }
   list.innerHTML = items.map(it => `
     <div class="list-item" data-id="${it.id}">
-      <div class="avatar-circle small">${avatarInnerHtml(it, defaultItemEmoji(it.type))}</div>
+      <div class="avatar-circle small">${avatarInnerHtml(it, defaultItemEmoji(it.name, it.type))}</div>
       <div style="flex:1">
         <div>${escapeHtml(it.name)} ${it.custom ? '★' : ''}</div>
         <div class="meta">${escapeHtml(it.type)}${it.rarity ? ' · ' + escapeHtml(it.rarity) : ''} · ${escapeHtml(it.weight || '')}</div>
@@ -1210,7 +1241,7 @@ function openItemDetail(id) {
   playPageTurn();
   const editBtn = it.custom ? `<button class="secondary block" id="editItem">Редактировать</button><button class="danger block" id="deleteItem">Удалить</button>` : '';
   openModal(it.name, `
-    <div class="avatar-circle large" style="margin:0 auto 12px">${avatarInnerHtml(it, defaultItemEmoji(it.type))}</div>
+    <div class="avatar-circle large" style="margin:0 auto 12px">${avatarInnerHtml(it, defaultItemEmoji(it.name, it.type))}</div>
     <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(it.type)}${it.rarity ? ' · ' + escapeHtml(it.rarity) : ''} · ${escapeHtml(it.weight || '')} · ${escapeHtml(it.cost || '')}</div>
     ${it.acBonus ? `<div style="margin-bottom:8px">🛡 Бонус к КД при экипировке: +${it.acBonus}</div>` : ''}
     ${it.atkBonus ? `<div style="margin-bottom:8px">⚔️ Бонус к атаке при экипировке: +${it.atkBonus}</div>` : ''}
@@ -1235,7 +1266,7 @@ function openItemForm(existing) {
   if (!it.rarity) it.rarity = 'Обычный';
   const rarityOptions = RARITIES.map(r => `<option ${r === it.rarity ? 'selected' : ''}>${r}</option>`).join('');
   openModal(existing ? 'Редактировать предмет' : 'Новый предмет', `
-    <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('itAvatar', it, defaultItemEmoji(it.type), true)}</div>
+    <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('itAvatar', it, defaultItemEmoji(it.name, it.type), true)}</div>
     <label>Название</label><input id="itName" value="${escapeAttr(it.name)}">
     <label>Тип</label><input id="itType" value="${escapeAttr(it.type)}" placeholder="Оружие / Броня / Снаряжение">
     <label>Редкость</label>
@@ -1251,7 +1282,7 @@ function openItemForm(existing) {
     <label>Свойства / описание</label><textarea id="itProps">${escapeHtml(it.properties)}</textarea>
     <button class="primary block" id="saveItem">Сохранить</button>
   `);
-  bindAvatarPicker('itAvatar', it, defaultItemEmoji(it.type), () => {});
+  bindAvatarPicker('itAvatar', it, defaultItemEmoji(it.name, it.type), () => {});
   document.getElementById('saveItem').addEventListener('click', () => {
     it.name = document.getElementById('itName').value.trim() || 'Без названия';
     it.type = document.getElementById('itType').value.trim() || 'Снаряжение';
@@ -1260,7 +1291,7 @@ function openItemForm(existing) {
     it.cost = document.getElementById('itCost').value.trim();
     it.acBonus = parseInt(document.getElementById('itAcBonus').value) || 0;
     it.atkBonus = parseInt(document.getElementById('itAtkBonus').value) || 0;
-    it.avatar = it.avatar || defaultItemEmoji(document.getElementById('itType').value.trim());
+    it.avatar = it.avatar || defaultItemEmoji(document.getElementById('itName').value.trim(), document.getElementById('itType').value.trim());
     it.properties = document.getElementById('itProps').value;
     it.custom = true;
     if (!state.items.find(x => x.id === it.id)) state.items.push(it);
