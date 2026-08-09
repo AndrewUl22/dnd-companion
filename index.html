@@ -48,7 +48,7 @@
 
     <div class="card">
       <div style="text-align:center;margin-bottom:12px">
-        <button type="button" class="avatar-circle" id="sheetAvatar" data-current="🧙">🧙</button>
+        <button type="button" class="avatar-circle large" id="sheetAvatar" data-current="🧙">🧙</button>
       </div>
       <label>Имя персонажа</label>
       <input id="sheetName" placeholder="Имя">
@@ -265,12 +265,19 @@
     <div class="chip-row" id="bestiaryFilter"></div>
     <div class="section-title">Сложность (КО)</div>
     <div class="chip-row" id="bestiaryCrFilter"></div>
+    <div class="section-title">Размер</div>
+    <div class="chip-row" id="bestiarySizeFilter"></div>
+    <div class="section-title">Обитание</div>
+    <div class="chip-row" id="bestiaryHabitatFilter" style="flex-wrap:wrap"></div>
     <div id="bestiaryList"></div>
   </section>
 
   <!-- ===== ITEMS VIEW ===== -->
   <section class="view" id="view-items">
+    <div class="section-title" style="margin-top:0">Тип</div>
     <div class="chip-row" id="itemsFilter"></div>
+    <div class="section-title">Редкость</div>
+    <div class="chip-row" id="itemsRarityFilter"></div>
     <div id="itemsList"></div>
   </section>
 

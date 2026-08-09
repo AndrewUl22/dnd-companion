@@ -36,7 +36,10 @@ let currentCharId = null;
 let activeView = 'characters';
 let bestiaryFilter = 'Все';
 let bestiaryCrFilter = 'Все';
+let bestiarySizeFilter = 'Все';
+let bestiaryHabitatFilter = 'Все';
 let itemsFilter = 'Все';
+let itemsRarityFilter = 'Все';
 let spellLevelFilter = 'Все';
 let spellClassFilter = 'Все';
 let spellSchoolFilter = 'Все';
@@ -728,13 +731,32 @@ function renderBestiaryFilterChips() {
   crWrap.querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', () => { bestiaryCrFilter = chip.dataset.cr; renderBestiary(); });
   });
+
+  const sizeWrap = document.getElementById('bestiarySizeFilter');
+  const sizeValues = ['Все', ...CREATURE_SIZES.filter(s => state.bestiary.some(b => b.size === s))];
+  sizeWrap.innerHTML = sizeValues.map(s => `<button class="chip ${s === bestiarySizeFilter ? 'active' : ''}" data-s="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('');
+  sizeWrap.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => { bestiarySizeFilter = chip.dataset.s; renderBestiary(); });
+  });
+
+  const habWrap = document.getElementById('bestiaryHabitatFilter');
+  const habValues = ['Все', ...HABITATS.filter(h => state.bestiary.some(b => (b.habitat || []).includes(h)))];
+  habWrap.innerHTML = habValues.map(h => `<button class="chip ${h === bestiaryHabitatFilter ? 'active' : ''}" data-h="${escapeHtml(h)}">${escapeHtml(h)}</button>`).join('');
+  habWrap.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => { bestiaryHabitatFilter = chip.dataset.h; renderBestiary(); });
+  });
 }
 
 function renderBestiary() {
   renderBestiaryFilterChips();
   const list = document.getElementById('bestiaryList');
   const items = state.bestiary
-    .filter(b => (bestiaryFilter === 'Все' || b.type === bestiaryFilter) && (bestiaryCrFilter === 'Все' || b.cr === bestiaryCrFilter))
+    .filter(b =>
+      (bestiaryFilter === 'Все' || b.type === bestiaryFilter) &&
+      (bestiaryCrFilter === 'Все' || b.cr === bestiaryCrFilter) &&
+      (bestiarySizeFilter === 'Все' || b.size === bestiarySizeFilter) &&
+      (bestiaryHabitatFilter === 'Все' || (b.habitat || []).includes(bestiaryHabitatFilter))
+    )
     .sort((a, b) => crToNumber(a.cr) - crToNumber(b.cr));
   if (!items.length) { list.innerHTML = '<div class="empty-state">Ничего не найдено</div>'; return; }
   list.innerHTML = items.map(b => `
@@ -742,7 +764,7 @@ function renderBestiary() {
       <div class="avatar-circle small">${avatarInnerHtml(b, defaultBeastEmoji(b.type))}</div>
       <div style="flex:1">
         <div>${escapeHtml(b.name)} ${b.custom ? '★' : ''}</div>
-        <div class="meta">${escapeHtml(b.type)} · КО ${escapeHtml(b.cr)} · КД ${b.ac} · ХП ${escapeHtml(String(b.hp))}</div>
+        <div class="meta">${escapeHtml(b.type)}${b.size ? ' · ' + escapeHtml(b.size) : ''} · КО ${escapeHtml(b.cr)} · КД ${b.ac} · ХП ${escapeHtml(String(b.hp))}</div>
       </div>
       <span class="badge">${escapeHtml(b.speed)}</span>
     </div>
@@ -760,7 +782,8 @@ function openBestiaryDetail(id) {
   const editBtn = b.custom ? `<button class="secondary block" id="editBeast">Редактировать</button><button class="danger block" id="deleteBeast">Удалить</button>` : '';
   openModal(b.name, `
     <div class="avatar-circle large" style="margin:0 auto 12px">${avatarInnerHtml(b, defaultBeastEmoji(b.type))}</div>
-    <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(b.type)} · КО ${escapeHtml(b.cr)}</div>
+    <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(b.type)}${b.size ? ' · ' + escapeHtml(b.size) : ''} · КО ${escapeHtml(b.cr)}</div>
+    ${b.habitat && b.habitat.length ? `<div class="meta" style="margin-bottom:8px;text-align:center">Обитание: ${escapeHtml(b.habitat.join(', '))}</div>` : ''}
     <div style="margin-bottom:8px">КД ${b.ac} · ХП ${escapeHtml(String(b.hp))} · Скорость ${escapeHtml(b.speed)}</div>
     <div style="margin-bottom:8px;font-size:13px;color:var(--text-dim)">${abRow}</div>
     <div style="white-space:pre-wrap;margin-bottom:10px">${escapeHtml(b.description || '')}</div>
@@ -781,7 +804,10 @@ function openBestiaryDetail(id) {
 }
 
 function openBestiaryForm(existing) {
-  const b = existing || { id: uid('b'), name: '', type: '', cr: '', ac: 10, hp: '', speed: '30 фт', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, actions: '', description: '', avatar: '', custom: true };
+  const b = existing || { id: uid('b'), name: '', type: '', cr: '', size: 'Средний', habitat: [], ac: 10, hp: '', speed: '30 фт', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, actions: '', description: '', avatar: '', custom: true };
+  if (!b.habitat) b.habitat = [];
+  const sizeOptions = CREATURE_SIZES.map(s => `<option ${s === b.size ? 'selected' : ''}>${s}</option>`).join('');
+  const habitatChips = HABITATS.map(h => `<button type="button" class="chip ${b.habitat.includes(h) ? 'active' : ''}" data-h="${escapeHtml(h)}">${escapeHtml(h)}</button>`).join('');
   openModal(existing ? 'Редактировать существо' : 'Новое существо', `
     <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('bAvatar', b, defaultBeastEmoji(b.type), true)}</div>
     <label>Название</label><input id="bName" value="${escapeAttr(b.name)}">
@@ -794,6 +820,10 @@ function openBestiaryForm(existing) {
       <div><label>ХП</label><input id="bHp" value="${escapeAttr(String(b.hp))}" placeholder="2к6"></div>
       <div><label>Скорость</label><input id="bSpeed" value="${escapeAttr(b.speed)}"></div>
     </div>
+    <label>Размер</label>
+    <select id="bSize">${sizeOptions}</select>
+    <label>Обитание (можно выбрать несколько)</label>
+    <div class="chip-row" id="bHabitatChips" style="flex-wrap:wrap">${habitatChips}</div>
     <label>Характеристики (СИЛ ЛОВ ТЕЛ ИНТ МДР ХАР через пробел)</label>
     <input id="bAbilities" value="${['str','dex','con','int','wis','cha'].map(k => b.abilities[k]).join(' ')}">
     <label>Описание</label><textarea id="bDesc">${escapeHtml(b.description)}</textarea>
@@ -801,6 +831,14 @@ function openBestiaryForm(existing) {
     <button class="primary block" id="saveBeast">Сохранить</button>
   `);
   bindAvatarPicker('bAvatar', b, defaultBeastEmoji(b.type), () => {});
+  const selectedHabitats = new Set(b.habitat);
+  document.getElementById('bHabitatChips').querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const h = chip.dataset.h;
+      if (selectedHabitats.has(h)) { selectedHabitats.delete(h); chip.classList.remove('active'); }
+      else { selectedHabitats.add(h); chip.classList.add('active'); }
+    });
+  });
   document.getElementById('saveBeast').addEventListener('click', () => {
     b.name = document.getElementById('bName').value.trim() || 'Без имени';
     b.type = document.getElementById('bType').value.trim();
@@ -808,6 +846,8 @@ function openBestiaryForm(existing) {
     b.ac = parseInt(document.getElementById('bAc').value) || 10;
     b.hp = document.getElementById('bHp').value.trim();
     b.speed = document.getElementById('bSpeed').value.trim();
+    b.size = document.getElementById('bSize').value;
+    b.habitat = Array.from(selectedHabitats);
     b.avatar = b.avatar || defaultBeastEmoji(document.getElementById('bType').value.trim());
     const nums = document.getElementById('bAbilities').value.trim().split(/\s+/).map(n => parseInt(n) || 10);
     const keys = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
@@ -1037,19 +1077,32 @@ function renderItemsFilterChips() {
   wrap.querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', () => { itemsFilter = chip.dataset.t; renderItems(); });
   });
+
+  const rarWrap = document.getElementById('itemsRarityFilter');
+  const rarValues = ['Все', ...RARITIES.filter(r => state.items.some(i => i.rarity === r))];
+  rarWrap.innerHTML = rarValues.map(r => `<button class="chip ${r === itemsRarityFilter ? 'active' : ''}" data-r="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join('');
+  rarWrap.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => { itemsRarityFilter = chip.dataset.r; renderItems(); });
+  });
+}
+
+function rarityToNumber(r) {
+  return Math.max(0, RARITIES.indexOf(r));
 }
 
 function renderItems() {
   renderItemsFilterChips();
   const list = document.getElementById('itemsList');
-  const items = state.items.filter(i => itemsFilter === 'Все' || i.type === itemsFilter);
+  const items = state.items
+    .filter(i => (itemsFilter === 'Все' || i.type === itemsFilter) && (itemsRarityFilter === 'Все' || i.rarity === itemsRarityFilter))
+    .sort((a, b) => rarityToNumber(a.rarity) - rarityToNumber(b.rarity));
   if (!items.length) { list.innerHTML = '<div class="empty-state">Ничего не найдено</div>'; return; }
   list.innerHTML = items.map(it => `
     <div class="list-item" data-id="${it.id}">
       <div class="avatar-circle small">${avatarInnerHtml(it, defaultItemEmoji(it.type))}</div>
       <div style="flex:1">
         <div>${escapeHtml(it.name)} ${it.custom ? '★' : ''}</div>
-        <div class="meta">${escapeHtml(it.type)} · ${escapeHtml(it.weight || '')}</div>
+        <div class="meta">${escapeHtml(it.type)}${it.rarity ? ' · ' + escapeHtml(it.rarity) : ''} · ${escapeHtml(it.weight || '')}</div>
       </div>
       <span class="badge">${escapeHtml(it.cost || '')}</span>
     </div>
@@ -1065,8 +1118,9 @@ function openItemDetail(id) {
   const editBtn = it.custom ? `<button class="secondary block" id="editItem">Редактировать</button><button class="danger block" id="deleteItem">Удалить</button>` : '';
   openModal(it.name, `
     <div class="avatar-circle large" style="margin:0 auto 12px">${avatarInnerHtml(it, defaultItemEmoji(it.type))}</div>
-    <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(it.type)} · ${escapeHtml(it.weight || '')} · ${escapeHtml(it.cost || '')}</div>
+    <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(it.type)}${it.rarity ? ' · ' + escapeHtml(it.rarity) : ''} · ${escapeHtml(it.weight || '')} · ${escapeHtml(it.cost || '')}</div>
     ${it.acBonus ? `<div style="margin-bottom:8px">🛡 Бонус к КД при экипировке: +${it.acBonus}</div>` : ''}
+    ${it.atkBonus ? `<div style="margin-bottom:8px">⚔️ Бонус к атаке при экипировке: +${it.atkBonus}</div>` : ''}
     <div style="white-space:pre-wrap">${escapeHtml(it.properties || '')}</div>
     ${editBtn}
   `);
@@ -1084,11 +1138,15 @@ function openItemDetail(id) {
 }
 
 function openItemForm(existing) {
-  const it = existing || { id: uid('i'), name: '', type: '', weight: '', cost: '', properties: '', acBonus: 0, atkBonus: 0, avatar: '', custom: true };
+  const it = existing || { id: uid('i'), name: '', type: '', weight: '', cost: '', properties: '', acBonus: 0, atkBonus: 0, rarity: 'Обычный', avatar: '', custom: true };
+  if (!it.rarity) it.rarity = 'Обычный';
+  const rarityOptions = RARITIES.map(r => `<option ${r === it.rarity ? 'selected' : ''}>${r}</option>`).join('');
   openModal(existing ? 'Редактировать предмет' : 'Новый предмет', `
     <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('itAvatar', it, defaultItemEmoji(it.type), true)}</div>
     <label>Название</label><input id="itName" value="${escapeAttr(it.name)}">
     <label>Тип</label><input id="itType" value="${escapeAttr(it.type)}" placeholder="Оружие / Броня / Снаряжение">
+    <label>Редкость</label>
+    <select id="itRarity">${rarityOptions}</select>
     <div class="row">
       <div><label>Вес</label><input id="itWeight" value="${escapeAttr(it.weight)}"></div>
       <div><label>Цена</label><input id="itCost" value="${escapeAttr(it.cost)}"></div>
@@ -1104,6 +1162,7 @@ function openItemForm(existing) {
   document.getElementById('saveItem').addEventListener('click', () => {
     it.name = document.getElementById('itName').value.trim() || 'Без названия';
     it.type = document.getElementById('itType').value.trim() || 'Снаряжение';
+    it.rarity = document.getElementById('itRarity').value;
     it.weight = document.getElementById('itWeight').value.trim();
     it.cost = document.getElementById('itCost').value.trim();
     it.acBonus = parseInt(document.getElementById('itAcBonus').value) || 0;

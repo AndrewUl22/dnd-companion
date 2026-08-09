@@ -38,6 +38,8 @@ const DEFAULT_BESTIARY = [
     name: "Гоблин",
     type: "Гуманоид (гоблиноид)",
     cr: "1/4",
+    size: "Маленький",
+    habitat: ["Лес", "Подземье", "Холмы"],
     ac: 15,
     hp: "2к6",
     speed: "30 фт",
@@ -51,6 +53,8 @@ const DEFAULT_BESTIARY = [
     name: "Волк",
     type: "Зверь",
     cr: "1/4",
+    size: "Средний",
+    habitat: ["Лес", "Равнина", "Горы", "Арктика"],
     ac: 13,
     hp: "2к8+2",
     speed: "40 фт",
@@ -64,6 +68,8 @@ const DEFAULT_BESTIARY = [
     name: "Орк",
     type: "Гуманоид (орк)",
     cr: "1/2",
+    size: "Средний",
+    habitat: ["Горы", "Холмы", "Равнина"],
     ac: 13,
     hp: "15 (2к8+6)",
     speed: "30 фт",
@@ -123,13 +129,20 @@ const DEFAULT_SPELLS = [
   { id: "sp_wish", name: "Желание", level: 9, school: "Вызов", time: "1 действие", range: "На себя", components: "В", duration: "Мгновенно", concentration: false, ritual: false, classes: ["Чародей", "Волшебник"], description: "Самое мощное заклинание из существующих: позволяет воплотить почти любой эффект силой одной лишь мысли, но злоупотребление им опасно для самого заклинателя.", custom: false }
 ];
 
+// Размеры и типы местности обитания (для бестиария)
+const CREATURE_SIZES = ["Крошечный", "Маленький", "Средний", "Большой", "Огромный", "Колоссальный"];
+const HABITATS = ["Арктика", "Подводье", "Побережье", "Пустыня", "Тропики", "Лес", "Равнина", "Холмы", "Горы", "Болота", "Подземье", "Город"];
+
+// Редкость предметов
+const RARITIES = ["Обычный", "Необычный", "Редкий", "Очень редкий", "Легендарный", "Артефакт"];
+
 const DEFAULT_ITEMS = [
-  { id: "i_longsword", name: "Длинный меч", type: "Оружие", weight: "1.5 кг", cost: "15 зм", properties: "1к8 рубящего урона, универсальное (1к10)", acBonus: 0, atkBonus: 0, custom: false },
-  { id: "i_chainmail", name: "Кольчуга", type: "Броня (тяжёлая)", weight: "27 кг", cost: "75 зм", properties: "КД 16, требует Силу 13, ограничивает скорость", acBonus: 6, atkBonus: 0, custom: false },
-  { id: "i_shield", name: "Щит", type: "Броня", weight: "3 кг", cost: "10 зм", properties: "Пока щит в руке, КД увеличивается на 2", acBonus: 2, atkBonus: 0, custom: false },
-  { id: "i_leather", name: "Кожаная броня", type: "Броня (лёгкая)", weight: "5 кг", cost: "10 зм", properties: "КД 11 + модификатор Ловкости", acBonus: 1, atkBonus: 0, custom: false },
-  { id: "i_healing_potion", name: "Зелье лечения", type: "Снаряжение", weight: "0.25 кг", cost: "50 зм", properties: "Восстанавливает 2к4+2 хитов", acBonus: 0, atkBonus: 0, custom: false },
-  { id: "i_rope", name: "Верёвка (15 м)", type: "Снаряжение", weight: "5 кг", cost: "1 зм", properties: "Прочная пеньковая верёвка", acBonus: 0, atkBonus: 0, custom: false }
+  { id: "i_longsword", name: "Длинный меч", type: "Оружие", weight: "1.5 кг", cost: "15 зм", properties: "1к8 рубящего урона, универсальное (1к10)", acBonus: 0, atkBonus: 0, rarity: "Обычный", custom: false },
+  { id: "i_chainmail", name: "Кольчуга", type: "Броня (тяжёлая)", weight: "27 кг", cost: "75 зм", properties: "КД 16, требует Силу 13, ограничивает скорость", acBonus: 6, atkBonus: 0, rarity: "Обычный", custom: false },
+  { id: "i_shield", name: "Щит", type: "Броня", weight: "3 кг", cost: "10 зм", properties: "Пока щит в руке, КД увеличивается на 2", acBonus: 2, atkBonus: 0, rarity: "Обычный", custom: false },
+  { id: "i_leather", name: "Кожаная броня", type: "Броня (лёгкая)", weight: "5 кг", cost: "10 зм", properties: "КД 11 + модификатор Ловкости", acBonus: 1, atkBonus: 0, rarity: "Обычный", custom: false },
+  { id: "i_healing_potion", name: "Зелье лечения", type: "Снаряжение", weight: "0.25 кг", cost: "50 зм", properties: "Восстанавливает 2к4+2 хитов", acBonus: 0, atkBonus: 0, rarity: "Необычный", custom: false },
+  { id: "i_rope", name: "Верёвка (15 м)", type: "Снаряжение", weight: "5 кг", cost: "1 зм", properties: "Прочная пеньковая верёвка", acBonus: 0, atkBonus: 0, rarity: "Обычный", custom: false }
 ];
 
 // Палитра эмодзи для выбора аватара персонажа/существа/предмета
