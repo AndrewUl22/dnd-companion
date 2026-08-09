@@ -944,6 +944,28 @@ function escapeHtml(str) {
 }
 function escapeAttr(str) { return escapeHtml(str); }
 
+// ==================== SPLASH SCREEN ====================
+(function () {
+  const splash = document.getElementById('splash');
+  if (!splash) return;
+  // Звук проигрывается только если браузер уже разрешил аудио (обычно после первого
+  // взаимодействия с приложением, например, повторного открытия PWA) — это ограничение
+  // самих браузеров, а не приложения.
+  try {
+    const ctx = getAudioCtx();
+    if (ctx.state === 'running') playSplashChime();
+  } catch (e) { /* тихо игнорируем */ }
+  setTimeout(() => {
+    splash.classList.add('fade-out');
+    setTimeout(() => splash.remove(), 550);
+  }, 1900);
+  // На случай первого тапа — "разбудить" звук на будущее
+  document.addEventListener('pointerdown', function unlockAudioOnce() {
+    try { getAudioCtx(); } catch (e) {}
+    document.removeEventListener('pointerdown', unlockAudioOnce);
+  }, { once: true });
+})();
+
 // ==================== INIT ====================
 renderCharList();
 

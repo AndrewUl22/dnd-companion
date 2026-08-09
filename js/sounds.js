@@ -95,6 +95,29 @@ function playDiceRoll() {
   } catch (e) { /* игнорируем */ }
 }
 
+// Магический перезвон для заставки при запуске: восходящий арпеджио колокольчиков
+function playSplashChime() {
+  if (!soundsEnabled()) return;
+  try {
+    const ctx = getAudioCtx();
+    const now = ctx.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5]; // C5 E5 G5 C6 E6
+    notes.forEach((freq, i) => {
+      const t = now + i * 0.11;
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.linearRampToValueAtTime(0.07, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 1);
+    });
+  } catch (e) { /* игнорируем */ }
+}
 // Мягкий "лист бумаги": используется при открытии карточек
 function playPageTurn() {
   if (!soundsEnabled()) return;
