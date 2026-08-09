@@ -227,15 +227,31 @@ button.block { width: 100%; margin-bottom: 8px; }
   position: fixed;
   right: 18px;
   bottom: 82px;
-  width: 52px; height: 52px;
+  width: 56px; height: 56px;
   border-radius: 50%;
-  background: var(--accent);
+  background: linear-gradient(150deg, var(--accent) 0%, #b8894a 100%);
   color: #1b1530;
   border: none;
-  font-size: 26px;
-  box-shadow: 0 4px 14px #0006;
+  font-size: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 16px #00000055, 0 0 0 4px var(--bg) inset;
   z-index: 15;
   cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.fab::before {
+  content: '';
+  width: 20px; height: 20px;
+  background:
+    linear-gradient(currentColor, currentColor) center / 100% 3px no-repeat,
+    linear-gradient(currentColor, currentColor) center / 3px 100% no-repeat;
+  border-radius: 2px;
+}
+.fab:active {
+  transform: scale(0.92);
+  box-shadow: 0 3px 10px #00000055, 0 0 0 4px var(--bg) inset;
 }
 
 .empty-state {
