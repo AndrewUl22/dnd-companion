@@ -26,6 +26,7 @@
 <header class="topbar">
   <h1 id="headerTitle">Персонажи</h1>
   <div class="row" style="flex:none;gap:2px">
+    <button class="icon-btn" id="battleBtn" title="Бой">⚔️</button>
     <button class="icon-btn" id="diceBtn" title="Кубики">🎲</button>
     <button class="icon-btn" id="settingsBtn" title="Настройки">⚙️</button>
   </div>
@@ -279,6 +280,20 @@
     <div class="section-title">Редкость</div>
     <div class="chip-row" id="itemsRarityFilter"></div>
     <div id="itemsList"></div>
+  </section>
+
+  <!-- ===== BATTLE VIEW ===== -->
+  <section class="view" id="view-battle">
+    <div class="card" style="text-align:center">
+      <div class="meta" style="margin-bottom:4px">Раунд</div>
+      <div style="font-size:32px;font-weight:700;color:var(--accent)" id="battleRound">1</div>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="nextTurnBtn">Следующий ход ▶</button>
+        <button class="danger" id="resetBattleBtn">Сбросить</button>
+      </div>
+    </div>
+    <div id="battleList"></div>
+    <div class="empty-state" id="battleEmpty" style="display:none">Участников пока нет.<br>Нажмите «+», чтобы добавить.</div>
   </section>
 
   <!-- ===== SETTINGS VIEW ===== -->

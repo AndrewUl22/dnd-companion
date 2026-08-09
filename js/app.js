@@ -13,6 +13,7 @@ function loadState() {
     spells: JSON.parse(JSON.stringify(DEFAULT_SPELLS)),
     customRaces: [],
     customClasses: [],
+    battle: { combatants: [], currentIndex: 0, round: 1 },
     settings: { theme: 'dark', soundEnabled: true }
   };
 }
@@ -25,6 +26,7 @@ let state = loadState();
 if (!state.spells) state.spells = JSON.parse(JSON.stringify(DEFAULT_SPELLS)); // миграция для старых сохранений
 if (!state.customRaces) state.customRaces = [];
 if (!state.customClasses) state.customClasses = [];
+if (!state.battle) state.battle = { combatants: [], currentIndex: 0, round: 1 };
 if (!state.settings) state.settings = { theme: 'dark', soundEnabled: true };
 
 function applyTheme() {
@@ -76,7 +78,7 @@ function switchView(view) {
   });
   const titles = {
     characters: 'Персонажи', bestiary: 'Бестиарий', items: 'Предметы', spells: 'Заклинания',
-    settings: 'Настройки', sheet: currentCharId ? getChar(currentCharId).name || 'Персонаж' : 'Персонаж'
+    settings: 'Настройки', battle: 'Бой', sheet: currentCharId ? getChar(currentCharId).name || 'Персонаж' : 'Персонаж'
   };
   document.getElementById('headerTitle').textContent = titles[view] || 'DnD Companion';
   document.getElementById('fabAdd').style.display = (view === 'sheet' || view === 'settings') ? 'none' : 'flex';
@@ -85,6 +87,7 @@ function switchView(view) {
   if (view === 'bestiary') renderBestiary();
   if (view === 'items') renderItems();
   if (view === 'spells') renderSpells();
+  if (view === 'battle') renderBattle();
 }
 
 document.querySelectorAll('nav.tabbar button').forEach(btn => {
@@ -92,12 +95,14 @@ document.querySelectorAll('nav.tabbar button').forEach(btn => {
 });
 
 document.getElementById('settingsBtn').addEventListener('click', () => switchView('settings'));
+document.getElementById('battleBtn').addEventListener('click', () => switchView('battle'));
 
 document.getElementById('fabAdd').addEventListener('click', () => {
   if (activeView === 'characters') openCharacterForm();
   else if (activeView === 'bestiary') openBestiaryForm();
   else if (activeView === 'items') openItemForm();
   else if (activeView === 'spells') openSpellForm();
+  else if (activeView === 'battle') openCombatantForm();
 });
 
 // ==================== MODAL ====================
@@ -122,6 +127,51 @@ function openAvatarModal(title, bodyHtml) {
 function closeAvatarModal() { avatarModalBackdrop.classList.add('hidden'); }
 document.getElementById('avatarModalClose').addEventListener('click', closeAvatarModal);
 avatarModalBackdrop.addEventListener('click', (e) => { if (e.target === avatarModalBackdrop) closeAvatarModal(); });
+
+// Общие псевдонимы: это тот же независимый оверлей, что и для выбора аватарки —
+// используется везде, где нужно открыть что-то ПОВЕРХ уже открытой формы,
+// не стирая её (например, заклинания монстра внутри формы редактирования существа)
+const openAuxModal = openAvatarModal;
+const closeAuxModal = closeAvatarModal;
+
+// ==================== СВОЙ СПИСОК ВЫБОРА (замена нативного <select>) ====================
+// Нативный select на телефоне открывает системный список ОС — его нельзя перекрасить
+// или добавить туда ховер/анимацию. Вместо этого рисуем свой список в модалке.
+function openListPicker(useAux, title, items, rowHtmlFn, onPick, searchFn) {
+  const open = useAux ? openAuxModal : openModal;
+  const bodyId = useAux ? 'avatarModalBody' : 'modalBody';
+  const render = (list) => {
+    const rows = list.length
+      ? list.map((item, idx) => `<div class="list-item picker-row" data-idx="${idx}">${rowHtmlFn(item)}</div>`).join('')
+      : '<div class="empty-state">Ничего не найдено</div>';
+    const searchHtml = searchFn ? `<input id="pickerSearch" placeholder="Поиск…" style="margin-bottom:10px">` : '';
+    open(title, `${searchHtml}<div id="pickerRows">${rows}</div>`);
+    const bind = () => {
+      document.getElementById(bodyId).querySelectorAll('.picker-row').forEach(el => {
+        el.addEventListener('click', () => {
+          onPick(list[parseInt(el.dataset.idx)]);
+          (useAux ? closeAuxModal : closeModal)();
+        });
+      });
+    };
+    bind();
+    if (searchFn) {
+      document.getElementById('pickerSearch').addEventListener('input', (e) => {
+        const filtered = items.filter(it => searchFn(it, e.target.value.toLowerCase()));
+        document.getElementById('pickerRows').innerHTML = filtered.length
+          ? filtered.map((item) => `<div class="list-item picker-row" data-idx="${items.indexOf(item)}">${rowHtmlFn(item)}</div>`).join('')
+          : '<div class="empty-state">Ничего не найдено</div>';
+        document.getElementById('pickerRows').querySelectorAll('.picker-row').forEach(el => {
+          el.addEventListener('click', () => {
+            onPick(items[parseInt(el.dataset.idx)]);
+            (useAux ? closeAuxModal : closeModal)();
+          });
+        });
+      });
+    }
+  };
+  render(items);
+}
 
 // ==================== AVATAR PICKER ====================
 // Аватар может быть либо эмодзи (record.avatar), либо загруженной картинкой (record.avatarImage, dataURL).
@@ -605,22 +655,19 @@ function updateTotalAC(c) {
 }
 
 document.getElementById('addInvFromCatalog').addEventListener('click', () => {
-  const options = state.items.map(it => `<option value="${it.id}">${escapeHtml(it.name)}</option>`).join('');
-  openModal('Добавить предмет', `
-    <label>Предмет из каталога</label>
-    <select id="invCatalogSelect">${options}</select>
-    <button class="primary block" id="invAddConfirm">Добавить в инвентарь</button>
-  `);
-  document.getElementById('invAddConfirm').addEventListener('click', () => {
-    const c = getChar(currentCharId);
-    const item = state.items.find(i => i.id === document.getElementById('invCatalogSelect').value);
-    const existing = c.inventory.find(i => i.itemId === item.id);
-    if (existing) existing.qty++;
-    else c.inventory.push({ itemId: item.id, name: item.name, type: item.type, qty: 1, acBonus: item.acBonus || 0, atkBonus: item.atkBonus || 0, equipped: false });
-    saveState();
-    renderInventory(c);
-    closeModal();
-  });
+  const sorted = state.items.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  openListPicker(false, 'Выберите предмет', sorted,
+    (it) => `<div class="avatar-circle small">${avatarInnerHtml(it, defaultItemEmoji(it.type))}</div><div style="flex:1"><div>${escapeHtml(it.name)}</div><div class="meta">${escapeHtml(it.type)}${it.rarity ? ' · ' + escapeHtml(it.rarity) : ''}</div></div><span class="badge">${escapeHtml(it.cost || '')}</span>`,
+    (item) => {
+      const c = getChar(currentCharId);
+      const existing = c.inventory.find(i => i.itemId === item.id);
+      if (existing) existing.qty++;
+      else c.inventory.push({ itemId: item.id, name: item.name, type: item.type, qty: 1, acBonus: item.acBonus || 0, atkBonus: item.atkBonus || 0, equipped: false });
+      saveState();
+      renderInventory(c);
+    },
+    (it, q) => it.name.toLowerCase().includes(q)
+  );
 });
 
 // bind sheet fields to state on change
@@ -780,6 +827,13 @@ function openBestiaryDetail(id) {
   const ab = b.abilities;
   const abRow = ab ? Object.entries(ab).map(([k, v]) => `${k.toUpperCase()} ${v} (${fmtMod(mod(v))})`).join(' · ') : '';
   const editBtn = b.custom ? `<button class="secondary block" id="editBeast">Редактировать</button><button class="danger block" id="deleteBeast">Удалить</button>` : '';
+  const spellsHtml = (b.knownSpells && b.knownSpells.length)
+    ? `<div class="section-title">Заклинания</div>` + b.knownSpells.map(spId => {
+        const sp = state.spells.find(x => x.id === spId);
+        if (!sp) return '';
+        return `<div class="skill-row" data-open-spell="${sp.id}" style="cursor:pointer"><span>${escapeHtml(sp.name)}</span><span class="mod">${sp.level === 0 ? 'Загов.' : 'Ур.' + sp.level} ▸</span></div>`;
+      }).join('')
+    : '';
   openModal(b.name, `
     <div class="avatar-circle large" style="margin:0 auto 12px">${avatarInnerHtml(b, defaultBeastEmoji(b.type))}</div>
     <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(b.type)}${b.size ? ' · ' + escapeHtml(b.size) : ''} · КО ${escapeHtml(b.cr)}</div>
@@ -788,8 +842,12 @@ function openBestiaryDetail(id) {
     <div style="margin-bottom:8px;font-size:13px;color:var(--text-dim)">${abRow}</div>
     <div style="white-space:pre-wrap;margin-bottom:10px">${escapeHtml(b.description || '')}</div>
     <div style="white-space:pre-wrap;font-size:13px;background:var(--bg-elevated);padding:10px;border-radius:10px">${escapeHtml(b.actions || '')}</div>
+    ${spellsHtml}
     ${editBtn}
   `);
+  document.querySelectorAll('[data-open-spell]').forEach(el => {
+    el.addEventListener('click', () => openSpellDetail(el.dataset.openSpell, true));
+  });
   if (b.custom) {
     document.getElementById('editBeast').addEventListener('click', () => openBestiaryForm(b));
     document.getElementById('deleteBeast').addEventListener('click', () => {
@@ -804,8 +862,9 @@ function openBestiaryDetail(id) {
 }
 
 function openBestiaryForm(existing) {
-  const b = existing || { id: uid('b'), name: '', type: '', cr: '', size: 'Средний', habitat: [], ac: 10, hp: '', speed: '30 фт', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, actions: '', description: '', avatar: '', custom: true };
+  const b = existing || { id: uid('b'), name: '', type: '', cr: '', size: 'Средний', habitat: [], ac: 10, hp: '', speed: '30 фт', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, actions: '', description: '', avatar: '', knownSpells: [], custom: true };
   if (!b.habitat) b.habitat = [];
+  if (!b.knownSpells) b.knownSpells = [];
   const sizeOptions = CREATURE_SIZES.map(s => `<option ${s === b.size ? 'selected' : ''}>${s}</option>`).join('');
   const habitatChips = HABITATS.map(h => `<button type="button" class="chip ${b.habitat.includes(h) ? 'active' : ''}" data-h="${escapeHtml(h)}">${escapeHtml(h)}</button>`).join('');
   openModal(existing ? 'Редактировать существо' : 'Новое существо', `
@@ -828,6 +887,9 @@ function openBestiaryForm(existing) {
     <input id="bAbilities" value="${['str','dex','con','int','wis','cha'].map(k => b.abilities[k]).join(' ')}">
     <label>Описание</label><textarea id="bDesc">${escapeHtml(b.description)}</textarea>
     <label>Действия</label><textarea id="bActions">${escapeHtml(b.actions)}</textarea>
+    <label style="margin-top:6px">Заклинания (если существо владеет магией)</label>
+    <div id="bKnownSpellsList"></div>
+    <button type="button" class="secondary block" id="bAddSpellBtn">+ Добавить заклинание из каталога</button>
     <button class="primary block" id="saveBeast">Сохранить</button>
   `);
   bindAvatarPicker('bAvatar', b, defaultBeastEmoji(b.type), () => {});
@@ -839,6 +901,42 @@ function openBestiaryForm(existing) {
       else { selectedHabitats.add(h); chip.classList.add('active'); }
     });
   });
+
+  function renderBeastSpellsInForm() {
+    const wrap = document.getElementById('bKnownSpellsList');
+    if (!b.knownSpells.length) {
+      wrap.innerHTML = '<div class="empty-state" style="padding:10px 0">Заклинания не добавлены</div>';
+      return;
+    }
+    wrap.innerHTML = b.knownSpells.map((spId, idx) => {
+      const sp = state.spells.find(x => x.id === spId);
+      if (!sp) return '';
+      return `<div class="inv-item"><div data-open-sp="${sp.id}" style="cursor:pointer">${escapeHtml(sp.name)} <span style="color:var(--text-dim);font-size:11px">▸ подробнее</span></div><button type="button" data-idx="${idx}" data-act="del-sp">✕</button></div>`;
+    }).join('');
+    wrap.querySelectorAll('[data-open-sp]').forEach(el => {
+      el.addEventListener('click', () => openSpellDetail(el.dataset.openSp, true));
+    });
+    wrap.querySelectorAll('[data-act="del-sp"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        b.knownSpells.splice(parseInt(btn.dataset.idx), 1);
+        renderBeastSpellsInForm();
+      });
+    });
+  }
+  renderBeastSpellsInForm();
+
+  document.getElementById('bAddSpellBtn').addEventListener('click', () => {
+    const sorted = state.spells.slice().sort((a, b2) => a.level - b2.level || a.name.localeCompare(b2.name, 'ru'));
+    openListPicker(true, 'Выберите заклинание', sorted,
+      (sp) => `<div style="flex:1"><div>${escapeHtml(sp.name)}</div><div class="meta">${escapeHtml(sp.school)}</div></div><span class="badge">${sp.level === 0 ? 'Загов.' : 'Ур.' + sp.level}</span>`,
+      (sp) => {
+        if (!b.knownSpells.includes(sp.id)) b.knownSpells.push(sp.id);
+        renderBeastSpellsInForm();
+      },
+      (sp, q) => sp.name.toLowerCase().includes(q)
+    );
+  });
+
   document.getElementById('saveBeast').addEventListener('click', () => {
     b.name = document.getElementById('bName').value.trim() || 'Без имени';
     b.type = document.getElementById('bType').value.trim();
@@ -926,11 +1024,13 @@ document.getElementById('spellSearch').addEventListener('input', (e) => {
   renderSpells();
 });
 
-function openSpellDetail(id) {
+function openSpellDetail(id, aux) {
   const s = state.spells.find(x => x.id === id);
+  const open = aux ? openAuxModal : openModal;
+  const close = aux ? closeAuxModal : closeModal;
   playPageTurn();
-  const editBtn = s.custom ? `<button class="secondary block" id="editSpell">Редактировать</button><button class="danger block" id="deleteSpell">Удалить</button>` : '';
-  openModal(s.name, `
+  const editBtn = (s.custom && !aux) ? `<button class="secondary block" id="editSpell">Редактировать</button><button class="danger block" id="deleteSpell">Удалить</button>` : '';
+  open(s.name, `
     <div class="meta" style="color:var(--text-dim);margin-bottom:8px">${escapeHtml(s.school)} · ${s.level === 0 ? 'Заговор' : 'Уровень ' + s.level}${s.ritual ? ' · Ритуал' : ''}</div>
     <div class="row" style="margin-bottom:8px;font-size:13px">
       <div>⏱ ${escapeHtml(s.time)}</div>
@@ -944,13 +1044,13 @@ function openSpellDetail(id) {
     <div style="white-space:pre-wrap">${escapeHtml(s.description || '')}</div>
     ${editBtn}
   `);
-  if (s.custom) {
+  if (s.custom && !aux) {
     document.getElementById('editSpell').addEventListener('click', () => openSpellForm(s));
     document.getElementById('deleteSpell').addEventListener('click', () => {
       if (!confirm('Удалить это заклинание?')) return;
       state.spells = state.spells.filter(x => x.id !== s.id);
       saveState();
-      closeModal();
+      close();
       renderSpells();
     });
   }
@@ -1048,25 +1148,18 @@ function renderCharSpells(c) {
 }
 
 document.getElementById('addSpellFromCatalog').addEventListener('click', () => {
-  const options = state.spells
-    .slice()
-    .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name, 'ru'))
-    .map(s => `<option value="${s.id}">${s.level === 0 ? 'Заговор' : 'Ур.' + s.level} — ${escapeHtml(s.name)}</option>`)
-    .join('');
-  openModal('Добавить заклинание', `
-    <label>Заклинание из каталога</label>
-    <select id="spellCatalogSelect">${options}</select>
-    <button class="primary block" id="spellAddConfirm">Добавить персонажу</button>
-  `);
-  document.getElementById('spellAddConfirm').addEventListener('click', () => {
-    const c = getChar(currentCharId);
-    const spellId = document.getElementById('spellCatalogSelect').value;
-    if (!c.knownSpells) c.knownSpells = [];
-    if (!c.knownSpells.includes(spellId)) c.knownSpells.push(spellId);
-    saveState();
-    renderCharSpells(c);
-    closeModal();
-  });
+  const sorted = state.spells.slice().sort((a, b) => a.level - b.level || a.name.localeCompare(b.name, 'ru'));
+  openListPicker(false, 'Выберите заклинание', sorted,
+    (s) => `<div style="flex:1"><div>${escapeHtml(s.name)}</div><div class="meta">${escapeHtml(s.school)}${s.concentration ? ' · конц.' : ''}</div></div><span class="badge">${s.level === 0 ? 'Загов.' : 'Ур.' + s.level}</span>`,
+    (s) => {
+      const c = getChar(currentCharId);
+      if (!c.knownSpells) c.knownSpells = [];
+      if (!c.knownSpells.includes(s.id)) c.knownSpells.push(s.id);
+      saveState();
+      renderCharSpells(c);
+    },
+    (s, q) => s.name.toLowerCase().includes(q)
+  );
 });
 
 // ==================== ITEMS ====================
@@ -1175,6 +1268,131 @@ function openItemForm(existing) {
     closeModal();
     renderItems();
     showToast('Сохранено');
+  });
+}
+
+// ==================== BATTLE TRACKER ====================
+function sortedCombatants() {
+  return state.battle.combatants
+    .map((c, idx) => ({ ...c, _idx: idx }))
+    .sort((a, b) => b.initiative - a.initiative);
+}
+
+function renderBattle() {
+  document.getElementById('battleRound').textContent = state.battle.round;
+  const list = document.getElementById('battleList');
+  const empty = document.getElementById('battleEmpty');
+  const ordered = sortedCombatants();
+  if (!ordered.length) {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  const curId = ordered[state.battle.currentIndex] ? ordered[state.battle.currentIndex]._idx : -1;
+  list.innerHTML = ordered.map((c) => `
+    <div class="list-item ${c._idx === curId ? 'current-turn' : ''}" style="cursor:default">
+      <div class="avatar-circle small">${escapeHtml(c.avatar || '⚔️')}</div>
+      <div style="flex:1">
+        <div>${escapeHtml(c.name)} ${c._idx === curId ? '▶' : ''}</div>
+        <div class="meta">Иниц. ${c.initiative} · КД ${c.ac}</div>
+      </div>
+      <div class="row" style="flex:none;gap:4px;align-items:center">
+        <button data-idx="${c._idx}" data-act="hpdown">−</button>
+        <input type="number" class="battle-hp-input" data-idx="${c._idx}" data-act="hpval" value="${c.hp}">
+        <span class="meta">/${c.maxHp}</span>
+        <button data-idx="${c._idx}" data-act="hpup">+</button>
+        <button data-idx="${c._idx}" data-act="del">✕</button>
+      </div>
+    </div>
+  `).join('');
+  list.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.idx);
+      const c = state.battle.combatants[idx];
+      if (btn.dataset.act === 'hpup') c.hp = Math.min(c.maxHp, c.hp + 1);
+      if (btn.dataset.act === 'hpdown') c.hp = Math.max(0, c.hp - 1);
+      if (btn.dataset.act === 'del') {
+        state.battle.combatants.splice(idx, 1);
+        if (state.battle.currentIndex >= state.battle.combatants.length) state.battle.currentIndex = 0;
+        playChainClink();
+      }
+      saveState();
+      renderBattle();
+    });
+  });
+  list.querySelectorAll('input[data-act="hpval"]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const idx = parseInt(inp.dataset.idx);
+      const c = state.battle.combatants[idx];
+      c.hp = Math.max(0, Math.min(c.maxHp, parseInt(inp.value) || 0));
+      saveState();
+    });
+  });
+}
+
+document.getElementById('nextTurnBtn').addEventListener('click', () => {
+  if (!state.battle.combatants.length) return;
+  state.battle.currentIndex++;
+  if (state.battle.currentIndex >= state.battle.combatants.length) {
+    state.battle.currentIndex = 0;
+    state.battle.round++;
+  }
+  saveState();
+  renderBattle();
+  playDiceRoll();
+});
+
+document.getElementById('resetBattleBtn').addEventListener('click', () => {
+  if (!confirm('Убрать всех участников и сбросить раунд?')) return;
+  state.battle = { combatants: [], currentIndex: 0, round: 1 };
+  saveState();
+  renderBattle();
+});
+
+function openCombatantForm() {
+  const charOptions = state.characters.map(c => `<option value="char:${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  const beastOptions = state.bestiary.map(b => `<option value="beast:${b.id}">${escapeHtml(b.name)}</option>`).join('');
+  openModal('Добавить участника', `
+    <label>Быстро добавить из персонажей/бестиария</label>
+    <select id="cbQuickPick">
+      <option value="">— выбрать —</option>
+      ${charOptions ? `<optgroup label="Персонажи">${charOptions}</optgroup>` : ''}
+      ${beastOptions ? `<optgroup label="Существа">${beastOptions}</optgroup>` : ''}
+    </select>
+    <label>Имя</label><input id="cbName" placeholder="Например, Гоблин №1">
+    <div class="row">
+      <div><label>ХП (максимум)</label><input id="cbHp" type="number" value="10"></div>
+      <div><label>КД</label><input id="cbAc" type="number" value="10"></div>
+    </div>
+    <label>Инициатива</label><input id="cbInit" type="number" value="10">
+    <button class="primary block" id="cbSaveBtn">Добавить в бой</button>
+  `);
+  document.getElementById('cbQuickPick').addEventListener('change', (e) => {
+    const [kind, id] = e.target.value.split(':');
+    if (kind === 'char') {
+      const c = getChar(id);
+      document.getElementById('cbName').value = c.name;
+      document.getElementById('cbHp').value = c.hp.max;
+      document.getElementById('cbAc').value = c.ac;
+    } else if (kind === 'beast') {
+      const b = state.bestiary.find(x => x.id === id);
+      document.getElementById('cbName').value = b.name;
+      const hpNum = parseInt(String(b.hp).match(/\d+/)?.[0]) || 10;
+      document.getElementById('cbHp').value = hpNum;
+      document.getElementById('cbAc').value = b.ac;
+    }
+  });
+  document.getElementById('cbSaveBtn').addEventListener('click', () => {
+    const name = document.getElementById('cbName').value.trim() || 'Участник';
+    const maxHp = parseInt(document.getElementById('cbHp').value) || 10;
+    const ac = parseInt(document.getElementById('cbAc').value) || 10;
+    const initiative = parseInt(document.getElementById('cbInit').value) || 0;
+    state.battle.combatants.push({ name, hp: maxHp, maxHp, ac, initiative, avatar: '⚔️' });
+    saveState();
+    closeModal();
+    renderBattle();
+    showToast('Добавлено в бой');
   });
 }
 
