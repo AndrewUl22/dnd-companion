@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dnd-companion-v2';
+const CACHE_NAME = 'dnd-companion-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -6,6 +6,7 @@ const ASSETS = [
   './css/style.css',
   './js/app.js',
   './js/data.js',
+  './js/sounds.js',
   './icons/icon-192.png',
   './icons/icon-512.png'
 ];

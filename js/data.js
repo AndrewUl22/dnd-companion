@@ -124,8 +124,26 @@ const DEFAULT_SPELLS = [
 ];
 
 const DEFAULT_ITEMS = [
-  { id: "i_longsword", name: "Длинный меч", type: "Оружие", weight: "1.5 кг", cost: "15 зм", properties: "1к8 рубящего урона, универсальное (1к10)", custom: false },
-  { id: "i_chainmail", name: "Кольчуга", type: "Броня (тяжёлая)", weight: "27 кг", cost: "75 зм", properties: "КД 16, требует Силу 13, ограничивает скорость", custom: false },
-  { id: "i_healing_potion", name: "Зелье лечения", type: "Снаряжение", weight: "0.25 кг", cost: "50 зм", properties: "Восстанавливает 2к4+2 хитов", custom: false },
-  { id: "i_rope", name: "Верёвка (15 м)", type: "Снаряжение", weight: "5 кг", cost: "1 зм", properties: "Прочная пеньковая верёвка", custom: false }
+  { id: "i_longsword", name: "Длинный меч", type: "Оружие", weight: "1.5 кг", cost: "15 зм", properties: "1к8 рубящего урона, универсальное (1к10)", acBonus: 0, custom: false },
+  { id: "i_chainmail", name: "Кольчуга", type: "Броня (тяжёлая)", weight: "27 кг", cost: "75 зм", properties: "КД 16, требует Силу 13, ограничивает скорость", acBonus: 6, custom: false },
+  { id: "i_shield", name: "Щит", type: "Броня", weight: "3 кг", cost: "10 зм", properties: "Пока щит в руке, КД увеличивается на 2", acBonus: 2, custom: false },
+  { id: "i_leather", name: "Кожаная броня", type: "Броня (лёгкая)", weight: "5 кг", cost: "10 зм", properties: "КД 11 + модификатор Ловкости", acBonus: 1, custom: false },
+  { id: "i_healing_potion", name: "Зелье лечения", type: "Снаряжение", weight: "0.25 кг", cost: "50 зм", properties: "Восстанавливает 2к4+2 хитов", acBonus: 0, custom: false },
+  { id: "i_rope", name: "Верёвка (15 м)", type: "Снаряжение", weight: "5 кг", cost: "1 зм", properties: "Прочная пеньковая верёвка", acBonus: 0, custom: false }
+];
+
+// Палитра эмодзи для выбора аватара персонажа/существа/предмета
+const EMOJI_PALETTE = [
+  "🧙", "🧝", "🧛", "🧟", "🧞", "🧜", "🧚", "🗡️", "⚔️", "🛡️",
+  "🏹", "🔮", "📜", "🐉", "🐺", "🦇", "🕷️", "💀", "👹", "👺",
+  "🦅", "🐍", "🦂", "🐗", "🐻", "🔥", "❄️", "⚡", "🌙", "⭐",
+  "💰", "🗝️", "🍺", "🏰", "⚱️", "🩸", "☠️", "🪓", "🔱", "🎭"
+];
+
+// Темы оформления
+const THEMES = [
+  { id: "dark", label: "Тёмное фэнтези" },
+  { id: "parchment", label: "Пергамент" },
+  { id: "midnight", label: "Полночь" },
+  { id: "emerald", label: "Изумруд" }
 ];

@@ -14,7 +14,10 @@
 
 <header class="topbar">
   <h1 id="headerTitle">Персонажи</h1>
-  <button class="icon-btn" id="settingsBtn" title="Настройки">⚙️</button>
+  <div class="row" style="flex:none;gap:2px">
+    <button class="icon-btn" id="diceBtn" title="Кубики">🎲</button>
+    <button class="icon-btn" id="settingsBtn" title="Настройки">⚙️</button>
+  </div>
 </header>
 
 <main>
@@ -33,16 +36,21 @@
     </div>
 
     <div class="card">
+      <div style="text-align:center;margin-bottom:12px">
+        <button type="button" class="avatar-circle" id="sheetAvatar" data-current="🧙">🧙</button>
+      </div>
       <label>Имя персонажа</label>
       <input id="sheetName" placeholder="Имя">
       <div class="row">
         <div>
           <label>Раса</label>
-          <select id="sheetRace"></select>
+          <input id="sheetRace" list="raceOptions" placeholder="Выберите или впишите свою">
+          <datalist id="raceOptions"></datalist>
         </div>
         <div>
           <label>Класс</label>
-          <select id="sheetClass"></select>
+          <input id="sheetClass" list="classOptions" placeholder="Выберите или впишите свой">
+          <datalist id="classOptions"></datalist>
         </div>
       </div>
       <div class="row">
@@ -64,7 +72,7 @@
       <h3>Здоровье и защита</h3>
       <div class="row">
         <div>
-          <label>КД</label>
+          <label>Базовый КД</label>
           <input id="sheetAC" type="number" value="10">
         </div>
         <div>
@@ -76,6 +84,7 @@
           <input id="sheetProf" type="number" value="2">
         </div>
       </div>
+      <div class="meta" style="margin:-6px 0 10px">Итоговый КД (с учётом экипировки): <b id="totalACDisplay" style="color:var(--accent)">10</b></div>
       <label>Хиты (текущие / максимум / временные)</label>
       <div class="hp-track">
         <input id="hpCurrent" type="number" value="10">
@@ -138,6 +147,17 @@
   <!-- ===== SETTINGS VIEW ===== -->
   <section class="view" id="view-settings">
     <div class="card">
+      <h3>Оформление</h3>
+      <div class="chip-row" id="themeChips"></div>
+    </div>
+    <div class="card">
+      <h3>Звук</h3>
+      <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text)">
+        <input type="checkbox" id="soundToggle" style="width:auto;margin:0">
+        Атмосферные звуковые эффекты
+      </label>
+    </div>
+    <div class="card">
       <h3>Свой контент</h3>
       <p style="color:var(--text-dim);font-size:13px;margin-top:0">
         Персонажи, а также добавленные вами существа и предметы хранятся прямо на устройстве.
@@ -185,6 +205,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="js/data.js"></script>
+<script src="js/sounds.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

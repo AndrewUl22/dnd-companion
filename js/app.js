@@ -10,7 +10,10 @@ function loadState() {
     characters: [],
     bestiary: JSON.parse(JSON.stringify(DEFAULT_BESTIARY)),
     items: JSON.parse(JSON.stringify(DEFAULT_ITEMS)),
-    spells: JSON.parse(JSON.stringify(DEFAULT_SPELLS))
+    spells: JSON.parse(JSON.stringify(DEFAULT_SPELLS)),
+    customRaces: [],
+    customClasses: [],
+    settings: { theme: 'dark', soundEnabled: true }
   };
 }
 
@@ -20,6 +23,15 @@ function saveState() {
 
 let state = loadState();
 if (!state.spells) state.spells = JSON.parse(JSON.stringify(DEFAULT_SPELLS)); // миграция для старых сохранений
+if (!state.customRaces) state.customRaces = [];
+if (!state.customClasses) state.customClasses = [];
+if (!state.settings) state.settings = { theme: 'dark', soundEnabled: true };
+
+function applyTheme() {
+  document.body.setAttribute('data-theme', state.settings.theme || 'dark');
+}
+applyTheme();
+
 let currentCharId = null;
 let activeView = 'characters';
 let bestiaryFilter = 'Все';
@@ -95,6 +107,59 @@ function closeModal() { modalBackdrop.classList.add('hidden'); }
 document.getElementById('modalClose').addEventListener('click', closeModal);
 modalBackdrop.addEventListener('click', (e) => { if (e.target === modalBackdrop) closeModal(); });
 
+// ==================== AVATAR PICKER ====================
+function avatarPickerHtml(id, current) {
+  return `
+    <button type="button" class="avatar-circle" id="${id}" data-current="${escapeAttr(current || '🧙')}">${current || '🧙'}</button>
+  `;
+}
+function bindAvatarPicker(btnId, onChange) {
+  const btn = document.getElementById(btnId);
+  btn.addEventListener('click', () => {
+    const grid = EMOJI_PALETTE.map(e => `<button type="button" class="emoji-choice" data-e="${e}">${e}</button>`).join('');
+    openModal('Выберите иконку', `
+      <div class="emoji-grid">${grid}</div>
+      <label style="margin-top:10px">Или впишите свой символ/эмодзи</label>
+      <input id="customEmojiInput" maxlength="4" placeholder="🐲">
+      <button class="primary block" id="customEmojiConfirm">Использовать</button>
+    `);
+    document.querySelectorAll('.emoji-choice').forEach(b => {
+      b.addEventListener('click', () => {
+        btn.textContent = b.dataset.e;
+        btn.dataset.current = b.dataset.e;
+        onChange(b.dataset.e);
+        closeModal();
+      });
+    });
+    document.getElementById('customEmojiConfirm').addEventListener('click', () => {
+      const val = document.getElementById('customEmojiInput').value.trim();
+      if (!val) return;
+      btn.textContent = val;
+      btn.dataset.current = val;
+      onChange(val);
+      closeModal();
+    });
+  });
+}
+
+// эмодзи по умолчанию, если у записи ещё нет своего аватара
+function defaultBeastEmoji(type) {
+  const t = (type || '').toLowerCase();
+  if (t.includes('дракон')) return '🐉';
+  if (t.includes('зверь')) return '🐺';
+  if (t.includes('нежит')) return '💀';
+  if (t.includes('гоблин') || t.includes('орк')) return '👹';
+  if (t.includes('гуманоид')) return '🧑';
+  if (t.includes('элементал')) return '🔥';
+  return '❔';
+}
+function defaultItemEmoji(type) {
+  const t = (type || '').toLowerCase();
+  if (t.includes('оруж')) return '⚔️';
+  if (t.includes('брон') || t.includes('щит')) return '🛡️';
+  return '🎒';
+}
+
 // ==================== CHARACTERS ====================
 function getChar(id) { return state.characters.find(c => c.id === id); }
 
@@ -102,6 +167,7 @@ function newCharacter(name) {
   return {
     id: uid('c'),
     name: name || 'Новый персонаж',
+    avatar: '🧙',
     race: DEFAULT_RACES[0],
     class: DEFAULT_CLASSES[0],
     level: 1,
@@ -142,7 +208,10 @@ function renderCharList() {
     const el = document.createElement('div');
     el.className = 'list-item';
     el.innerHTML = `
-      <div>
+      <div class="row" style="align-items:center;flex:none;gap:10px">
+        <div class="avatar-circle small">${c.avatar || '🧙'}</div>
+      </div>
+      <div style="flex:1">
         <div>${escapeHtml(c.name)}</div>
         <div class="meta">${escapeHtml(c.race)} · ${escapeHtml(c.class)} · ур. ${c.level}</div>
       </div>
@@ -156,11 +225,13 @@ function renderCharList() {
 function openCharacter(id) {
   currentCharId = id;
   const c = getChar(id);
+  if (!c.avatar) c.avatar = '🧙';
   document.getElementById('sheetName').value = c.name;
-  const raceSel = document.getElementById('sheetRace');
-  const classSel = document.getElementById('sheetClass');
-  raceSel.innerHTML = DEFAULT_RACES.map(r => `<option ${r === c.race ? 'selected' : ''}>${r}</option>`).join('');
-  classSel.innerHTML = DEFAULT_CLASSES.map(cl => `<option ${cl === c.class ? 'selected' : ''}>${cl}</option>`).join('');
+  document.getElementById('sheetAvatar').textContent = c.avatar;
+  document.getElementById('sheetAvatar').dataset.current = c.avatar;
+  populateRaceClassOptions();
+  document.getElementById('sheetRace').value = c.race;
+  document.getElementById('sheetClass').value = c.class;
   document.getElementById('sheetLevel').value = c.level;
   document.getElementById('sheetBackground').value = c.background;
   document.getElementById('sheetAC').value = c.ac;
@@ -176,14 +247,23 @@ function openCharacter(id) {
   renderSkills(c);
   renderInventory(c);
   renderCharSpells(c);
+  updateTotalAC(c);
   switchView('sheet');
+  playDoorCreak();
+}
+
+function populateRaceClassOptions() {
+  const raceList = document.getElementById('raceOptions');
+  const classList = document.getElementById('classOptions');
+  raceList.innerHTML = [...DEFAULT_RACES, ...state.customRaces].map(r => `<option value="${escapeAttr(r)}">`).join('');
+  classList.innerHTML = [...DEFAULT_CLASSES, ...state.customClasses].map(cl => `<option value="${escapeAttr(cl)}">`).join('');
 }
 
 function renderAbilityGrid(c) {
   const grid = document.getElementById('abilityGrid');
   const labels = { str: 'Сила', dex: 'Ловкость', con: 'Телослож.', int: 'Интеллект', wis: 'Мудрость', cha: 'Харизма' };
   grid.innerHTML = Object.keys(labels).map(k => `
-    <div class="ability-box">
+    <div class="ability-box" data-key="${k}">
       <div class="label">${labels[k]}</div>
       <div class="score">${c.abilities[k]}</div>
       <div class="mod">${fmtMod(mod(c.abilities[k]))}</div>
@@ -191,11 +271,17 @@ function renderAbilityGrid(c) {
     </div>
   `).join('');
   grid.querySelectorAll('input').forEach(inp => {
+    // ВАЖНО: обновляем только текст соседних элементов, не пересоздаём инпуты —
+    // иначе на мобильных клавиатура схлопывается при каждом нажатии клавиши.
     inp.addEventListener('input', () => {
       const c = getChar(currentCharId);
-      c.abilities[inp.dataset.ability] = parseInt(inp.value) || 0;
+      const key = inp.dataset.ability;
+      const val = parseInt(inp.value);
+      c.abilities[key] = isNaN(val) ? 0 : val;
       saveState();
-      renderAbilityGrid(c);
+      const box = inp.closest('.ability-box');
+      box.querySelector('.score').textContent = c.abilities[key];
+      box.querySelector('.mod').textContent = fmtMod(mod(c.abilities[key]));
       renderSkills(c);
     });
   });
@@ -213,33 +299,46 @@ function renderInventory(c) {
   const wrap = document.getElementById('sheetInventory');
   if (!c.inventory.length) {
     wrap.innerHTML = '<div class="empty-state" style="padding:16px 0">Инвентарь пуст</div>';
+    updateTotalAC(c);
     return;
   }
-  wrap.innerHTML = c.inventory.map((it, idx) => `
+  wrap.innerHTML = c.inventory.map((it, idx) => {
+    const canEquip = !!it.acBonus;
+    return `
     <div class="inv-item">
       <div>
-        <div>${escapeHtml(it.name)}</div>
-        <div class="meta" style="color:var(--text-dim);font-size:11px">${escapeHtml(it.type || '')}</div>
+        <div>${escapeHtml(it.name)} ${it.equipped ? '✅' : ''}</div>
+        <div class="meta" style="color:var(--text-dim);font-size:11px">${escapeHtml(it.type || '')}${canEquip ? ' · КД +' + it.acBonus : ''}</div>
       </div>
-      <div class="qty-controls row" style="flex:none;gap:4px">
+      <div class="qty-controls row" style="flex:none;gap:4px;align-items:center">
+        ${canEquip ? `<button data-idx="${idx}" data-act="equip" class="secondary" style="padding:5px 8px;font-size:11px">${it.equipped ? 'Снять' : 'Надеть'}</button>` : ''}
         <button data-idx="${idx}" data-act="dec">−</button>
         <span style="padding:0 6px">${it.qty}</span>
         <button data-idx="${idx}" data-act="inc">+</button>
         <button data-idx="${idx}" data-act="del">✕</button>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
   wrap.querySelectorAll('button').forEach(btn => {
     btn.addEventListener('click', () => {
       const c = getChar(currentCharId);
       const idx = parseInt(btn.dataset.idx);
       if (btn.dataset.act === 'inc') c.inventory[idx].qty++;
       if (btn.dataset.act === 'dec') c.inventory[idx].qty = Math.max(0, c.inventory[idx].qty - 1);
-      if (btn.dataset.act === 'del') c.inventory.splice(idx, 1);
+      if (btn.dataset.act === 'del') { c.inventory.splice(idx, 1); playChainClink(); }
+      if (btn.dataset.act === 'equip') c.inventory[idx].equipped = !c.inventory[idx].equipped;
       saveState();
       renderInventory(c);
     });
   });
+  updateTotalAC(c);
+}
+
+function updateTotalAC(c) {
+  const bonus = (c.inventory || []).filter(i => i.equipped && i.acBonus).reduce((sum, i) => sum + i.acBonus, 0);
+  const el = document.getElementById('totalACDisplay');
+  if (el) el.textContent = (parseInt(c.ac) || 0) + bonus;
 }
 
 document.getElementById('addInvFromCatalog').addEventListener('click', () => {
@@ -254,7 +353,7 @@ document.getElementById('addInvFromCatalog').addEventListener('click', () => {
     const item = state.items.find(i => i.id === document.getElementById('invCatalogSelect').value);
     const existing = c.inventory.find(i => i.itemId === item.id);
     if (existing) existing.qty++;
-    else c.inventory.push({ itemId: item.id, name: item.name, type: item.type, qty: 1 });
+    else c.inventory.push({ itemId: item.id, name: item.name, type: item.type, qty: 1, acBonus: item.acBonus || 0, equipped: false });
     saveState();
     renderInventory(c);
     closeModal();
@@ -274,10 +373,31 @@ document.getElementById('addInvFromCatalog').addEventListener('click', () => {
     c[field] = (el.type === 'number') ? (parseInt(el.value) || 0) : el.value;
     saveState();
     if (field === 'name') renderCharList();
+    if (field === 'ac') updateTotalAC(c);
   });
 });
-document.getElementById('sheetRace').addEventListener('change', (e) => { getChar(currentCharId).race = e.target.value; saveState(); });
-document.getElementById('sheetClass').addEventListener('change', (e) => { getChar(currentCharId).class = e.target.value; saveState(); });
+document.getElementById('sheetRace').addEventListener('change', (e) => {
+  const val = e.target.value.trim();
+  if (!val) return;
+  getChar(currentCharId).race = val;
+  if (!DEFAULT_RACES.includes(val) && !state.customRaces.includes(val)) state.customRaces.push(val);
+  saveState();
+  renderCharList();
+});
+document.getElementById('sheetClass').addEventListener('change', (e) => {
+  const val = e.target.value.trim();
+  if (!val) return;
+  getChar(currentCharId).class = val;
+  if (!DEFAULT_CLASSES.includes(val) && !state.customClasses.includes(val)) state.customClasses.push(val);
+  saveState();
+  renderCharList();
+});
+bindAvatarPicker('sheetAvatar', (emoji) => {
+  const c = getChar(currentCharId);
+  c.avatar = emoji;
+  saveState();
+  renderCharList();
+});
 ['hpCurrent', 'hpMax', 'hpTemp'].forEach((elId, i) => {
   const field = ['current', 'max', 'temp'][i];
   document.getElementById(elId).addEventListener('input', () => {
@@ -293,6 +413,7 @@ document.getElementById('deleteCharBtn').addEventListener('click', () => {
   if (!confirm('Удалить этого персонажа безвозвратно?')) return;
   state.characters = state.characters.filter(c => c.id !== currentCharId);
   saveState();
+  playChainClink();
   switchView('characters');
 });
 
@@ -313,7 +434,8 @@ function renderBestiary() {
   if (!items.length) { list.innerHTML = '<div class="empty-state">Ничего не найдено</div>'; return; }
   list.innerHTML = items.map(b => `
     <div class="list-item" data-id="${b.id}">
-      <div>
+      <div class="avatar-circle small">${b.avatar || defaultBeastEmoji(b.type)}</div>
+      <div style="flex:1">
         <div>${escapeHtml(b.name)} ${b.custom ? '★' : ''}</div>
         <div class="meta">${escapeHtml(b.type)} · КО ${escapeHtml(b.cr)} · КД ${b.ac} · ХП ${escapeHtml(String(b.hp))}</div>
       </div>
@@ -327,11 +449,13 @@ function renderBestiary() {
 
 function openBestiaryDetail(id) {
   const b = state.bestiary.find(x => x.id === id);
+  playPageTurn();
   const ab = b.abilities;
   const abRow = ab ? Object.entries(ab).map(([k, v]) => `${k.toUpperCase()} ${v} (${fmtMod(mod(v))})`).join(' · ') : '';
   const editBtn = b.custom ? `<button class="secondary block" id="editBeast">Редактировать</button><button class="danger block" id="deleteBeast">Удалить</button>` : '';
   openModal(b.name, `
-    <div class="meta" style="color:var(--text-dim);margin-bottom:8px">${escapeHtml(b.type)} · КО ${escapeHtml(b.cr)}</div>
+    <div class="avatar-circle" style="margin:0 auto 12px">${b.avatar || defaultBeastEmoji(b.type)}</div>
+    <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(b.type)} · КО ${escapeHtml(b.cr)}</div>
     <div style="margin-bottom:8px">КД ${b.ac} · ХП ${escapeHtml(String(b.hp))} · Скорость ${escapeHtml(b.speed)}</div>
     <div style="margin-bottom:8px;font-size:13px;color:var(--text-dim)">${abRow}</div>
     <div style="white-space:pre-wrap;margin-bottom:10px">${escapeHtml(b.description || '')}</div>
@@ -344,6 +468,7 @@ function openBestiaryDetail(id) {
       if (!confirm('Удалить это существо?')) return;
       state.bestiary = state.bestiary.filter(x => x.id !== b.id);
       saveState();
+      playChainClink();
       closeModal();
       renderBestiary();
     });
@@ -351,8 +476,9 @@ function openBestiaryDetail(id) {
 }
 
 function openBestiaryForm(existing) {
-  const b = existing || { id: uid('b'), name: '', type: '', cr: '', ac: 10, hp: '', speed: '30 фт', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, actions: '', description: '', custom: true };
+  const b = existing || { id: uid('b'), name: '', type: '', cr: '', ac: 10, hp: '', speed: '30 фт', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, actions: '', description: '', avatar: '', custom: true };
   openModal(existing ? 'Редактировать существо' : 'Новое существо', `
+    <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('bAvatar', b.avatar || defaultBeastEmoji(b.type))}</div>
     <label>Название</label><input id="bName" value="${escapeAttr(b.name)}">
     <label>Тип</label><input id="bType" value="${escapeAttr(b.type)}" placeholder="Например, Гуманоид">
     <div class="row">
@@ -369,6 +495,7 @@ function openBestiaryForm(existing) {
     <label>Действия</label><textarea id="bActions">${escapeHtml(b.actions)}</textarea>
     <button class="primary block" id="saveBeast">Сохранить</button>
   `);
+  bindAvatarPicker('bAvatar', (emoji) => { b.avatar = emoji; });
   document.getElementById('saveBeast').addEventListener('click', () => {
     b.name = document.getElementById('bName').value.trim() || 'Без имени';
     b.type = document.getElementById('bType').value.trim();
@@ -376,6 +503,7 @@ function openBestiaryForm(existing) {
     b.ac = parseInt(document.getElementById('bAc').value) || 10;
     b.hp = document.getElementById('bHp').value.trim();
     b.speed = document.getElementById('bSpeed').value.trim();
+    b.avatar = document.getElementById('bAvatar').dataset.current || b.avatar;
     const nums = document.getElementById('bAbilities').value.trim().split(/\s+/).map(n => parseInt(n) || 10);
     const keys = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
     keys.forEach((k, i) => { b.abilities[k] = nums[i] !== undefined ? nums[i] : 10; });
@@ -455,6 +583,7 @@ document.getElementById('spellSearch').addEventListener('input', (e) => {
 
 function openSpellDetail(id) {
   const s = state.spells.find(x => x.id === id);
+  playPageTurn();
   const editBtn = s.custom ? `<button class="secondary block" id="editSpell">Редактировать</button><button class="danger block" id="deleteSpell">Удалить</button>` : '';
   openModal(s.name, `
     <div class="meta" style="color:var(--text-dim);margin-bottom:8px">${escapeHtml(s.school)} · ${s.level === 0 ? 'Заговор' : 'Уровень ' + s.level}${s.ritual ? ' · Ритуал' : ''}</div>
@@ -552,15 +681,18 @@ function renderCharSpells(c) {
     if (!s) return '';
     return `
       <div class="inv-item">
-        <div>
-          <div>${escapeHtml(s.name)}</div>
+        <div class="spell-tap" data-open="${s.id}" style="cursor:pointer">
+          <div>${escapeHtml(s.name)} <span style="color:var(--text-dim);font-size:11px">▸ подробнее</span></div>
           <div class="meta" style="color:var(--text-dim);font-size:11px">${s.level === 0 ? 'Заговор' : 'Ур. ' + s.level} · ${escapeHtml(s.school)}</div>
         </div>
         <button data-idx="${idx}" data-act="del">✕</button>
       </div>
     `;
   }).join('');
-  wrap.querySelectorAll('button').forEach(btn => {
+  wrap.querySelectorAll('[data-open]').forEach(el => {
+    el.addEventListener('click', () => openSpellDetail(el.dataset.open));
+  });
+  wrap.querySelectorAll('button[data-act="del"]').forEach(btn => {
     btn.addEventListener('click', () => {
       const c = getChar(currentCharId);
       c.knownSpells.splice(parseInt(btn.dataset.idx), 1);
@@ -609,7 +741,8 @@ function renderItems() {
   if (!items.length) { list.innerHTML = '<div class="empty-state">Ничего не найдено</div>'; return; }
   list.innerHTML = items.map(it => `
     <div class="list-item" data-id="${it.id}">
-      <div>
+      <div class="avatar-circle small">${it.avatar || defaultItemEmoji(it.type)}</div>
+      <div style="flex:1">
         <div>${escapeHtml(it.name)} ${it.custom ? '★' : ''}</div>
         <div class="meta">${escapeHtml(it.type)} · ${escapeHtml(it.weight || '')}</div>
       </div>
@@ -623,9 +756,12 @@ function renderItems() {
 
 function openItemDetail(id) {
   const it = state.items.find(x => x.id === id);
+  playPageTurn();
   const editBtn = it.custom ? `<button class="secondary block" id="editItem">Редактировать</button><button class="danger block" id="deleteItem">Удалить</button>` : '';
   openModal(it.name, `
-    <div class="meta" style="color:var(--text-dim);margin-bottom:8px">${escapeHtml(it.type)} · ${escapeHtml(it.weight || '')} · ${escapeHtml(it.cost || '')}</div>
+    <div class="avatar-circle" style="margin:0 auto 12px">${it.avatar || defaultItemEmoji(it.type)}</div>
+    <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(it.type)} · ${escapeHtml(it.weight || '')} · ${escapeHtml(it.cost || '')}</div>
+    ${it.acBonus ? `<div style="margin-bottom:8px">🛡 Бонус к КД при экипировке: +${it.acBonus}</div>` : ''}
     <div style="white-space:pre-wrap">${escapeHtml(it.properties || '')}</div>
     ${editBtn}
   `);
@@ -635,6 +771,7 @@ function openItemDetail(id) {
       if (!confirm('Удалить этот предмет?')) return;
       state.items = state.items.filter(x => x.id !== it.id);
       saveState();
+      playChainClink();
       closeModal();
       renderItems();
     });
@@ -642,22 +779,28 @@ function openItemDetail(id) {
 }
 
 function openItemForm(existing) {
-  const it = existing || { id: uid('i'), name: '', type: '', weight: '', cost: '', properties: '', custom: true };
+  const it = existing || { id: uid('i'), name: '', type: '', weight: '', cost: '', properties: '', acBonus: 0, avatar: '', custom: true };
   openModal(existing ? 'Редактировать предмет' : 'Новый предмет', `
+    <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('itAvatar', it.avatar || defaultItemEmoji(it.type))}</div>
     <label>Название</label><input id="itName" value="${escapeAttr(it.name)}">
     <label>Тип</label><input id="itType" value="${escapeAttr(it.type)}" placeholder="Оружие / Броня / Снаряжение">
     <div class="row">
       <div><label>Вес</label><input id="itWeight" value="${escapeAttr(it.weight)}"></div>
       <div><label>Цена</label><input id="itCost" value="${escapeAttr(it.cost)}"></div>
     </div>
+    <label>Бонус к КД при экипировке (0, если не влияет)</label>
+    <input id="itAcBonus" type="number" value="${it.acBonus || 0}">
     <label>Свойства / описание</label><textarea id="itProps">${escapeHtml(it.properties)}</textarea>
     <button class="primary block" id="saveItem">Сохранить</button>
   `);
+  bindAvatarPicker('itAvatar', (emoji) => { it.avatar = emoji; });
   document.getElementById('saveItem').addEventListener('click', () => {
     it.name = document.getElementById('itName').value.trim() || 'Без названия';
     it.type = document.getElementById('itType').value.trim() || 'Снаряжение';
     it.weight = document.getElementById('itWeight').value.trim();
     it.cost = document.getElementById('itCost').value.trim();
+    it.acBonus = parseInt(document.getElementById('itAcBonus').value) || 0;
+    it.avatar = document.getElementById('itAvatar').dataset.current || it.avatar;
     it.properties = document.getElementById('itProps').value;
     it.custom = true;
     if (!state.items.find(x => x.id === it.id)) state.items.push(it);
@@ -711,6 +854,12 @@ document.getElementById('importFile').addEventListener('change', (e) => {
           if (!state.spells.find(x => x.id === sp.id)) state.spells.push(sp);
         });
       }
+      if (Array.isArray(incoming.customRaces)) {
+        incoming.customRaces.forEach(r => { if (!state.customRaces.includes(r)) state.customRaces.push(r); });
+      }
+      if (Array.isArray(incoming.customClasses)) {
+        incoming.customClasses.forEach(cl => { if (!state.customClasses.includes(cl)) state.customClasses.push(cl); });
+      }
       saveState();
       showToast('Импорт завершён');
       renderCharList(); renderBestiary(); renderItems(); renderSpells();
@@ -726,9 +875,66 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   if (!confirm('Это удалит всех персонажей и весь добавленный контент. Продолжить?')) return;
   localStorage.removeItem(STORE_KEY);
   state = loadState();
+  applyTheme();
   showToast('Данные очищены');
   switchView('characters');
 });
+
+// ==================== THEME & SOUND SETTINGS ====================
+function renderThemeChips() {
+  const wrap = document.getElementById('themeChips');
+  wrap.innerHTML = THEMES.map(t => `<button class="chip ${state.settings.theme === t.id ? 'active' : ''}" data-theme="${t.id}">${escapeHtml(t.label)}</button>`).join('');
+  wrap.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      state.settings.theme = chip.dataset.theme;
+      saveState();
+      applyTheme();
+      renderThemeChips();
+    });
+  });
+}
+renderThemeChips();
+
+const soundToggle = document.getElementById('soundToggle');
+soundToggle.checked = state.settings.soundEnabled !== false;
+soundToggle.addEventListener('change', () => {
+  state.settings.soundEnabled = soundToggle.checked;
+  saveState();
+  if (soundToggle.checked) playChainClink();
+});
+
+// ==================== DICE ROLLER ====================
+const DICE_TYPES = [4, 6, 8, 10, 12, 20, 100];
+let diceHistory = [];
+
+function openDiceRoller() {
+  renderDiceModal();
+}
+
+function renderDiceModal() {
+  const buttons = DICE_TYPES.map(d => `<button type="button" class="chip dice-btn" data-d="${d}" style="font-size:15px;padding:12px 16px">d${d}</button>`).join('');
+  const historyHtml = diceHistory.length
+    ? diceHistory.slice(0, 10).map(h => `<div class="skill-row"><span>d${h.die}</span><span class="mod">${h.result}</span></div>`).join('')
+    : '<div class="empty-state" style="padding:10px 0">Пока не было бросков</div>';
+  openModal('Кубики', `
+    <div class="chip-row" id="diceButtons" style="flex-wrap:wrap">${buttons}</div>
+    <div id="diceResultBig" style="text-align:center;font-size:48px;font-weight:700;color:var(--accent);margin:16px 0">—</div>
+    <div class="section-title" style="margin-top:4px">История</div>
+    <div id="diceHistoryList">${historyHtml}</div>
+  `);
+  document.querySelectorAll('.dice-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const die = parseInt(btn.dataset.d);
+      const result = 1 + Math.floor(Math.random() * die);
+      diceHistory.unshift({ die, result });
+      document.getElementById('diceResultBig').textContent = result;
+      document.getElementById('diceHistoryList').innerHTML = diceHistory.slice(0, 10).map(h => `<div class="skill-row"><span>d${h.die}</span><span class="mod">${h.result}</span></div>`).join('');
+      playDiceRoll();
+    });
+  });
+}
+
+document.getElementById('diceBtn').addEventListener('click', openDiceRoller);
 
 // ==================== HELPERS ====================
 function escapeHtml(str) {

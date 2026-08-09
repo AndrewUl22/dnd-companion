@@ -12,6 +12,45 @@
   --radius: 14px;
 }
 
+body[data-theme="parchment"] {
+  --bg: #ece0c4;
+  --bg-elevated: #f4ead0;
+  --card: #f8f1dc;
+  --card-border: #cbb98a;
+  --accent: #8a3324;
+  --accent-soft: #8a332433;
+  --text: #3a2a18;
+  --text-dim: #7a6a4e;
+  --danger: #b23a3a;
+  --success: #3f7a4e;
+}
+
+body[data-theme="midnight"] {
+  --bg: #0b0c14;
+  --bg-elevated: #12141f;
+  --card: #171a29;
+  --card-border: #262b40;
+  --accent: #6fa9e0;
+  --accent-soft: #6fa9e033;
+  --text: #e6ecf7;
+  --text-dim: #8b93ab;
+  --danger: #e07a7a;
+  --success: #6fc98a;
+}
+
+body[data-theme="emerald"] {
+  --bg: #10241d;
+  --bg-elevated: #163227;
+  --card: #1c3b2e;
+  --card-border: #2e5945;
+  --accent: #7fd9a8;
+  --accent-soft: #7fd9a833;
+  --text: #e3f6ec;
+  --text-dim: #9bc4ac;
+  --danger: #e08a7a;
+  --success: #7fd9a8;
+}
+
 * { box-sizing: border-box; }
 
 html, body {
@@ -27,8 +66,8 @@ body {
   padding-bottom: 72px;
   min-height: 100vh;
   background:
-    radial-gradient(circle at 20% 0%, #2a1f4a 0%, transparent 45%),
-    radial-gradient(circle at 90% 10%, #241b3d 0%, transparent 40%),
+    radial-gradient(circle at 20% 0%, var(--card) 0%, transparent 45%),
+    radial-gradient(circle at 90% 10%, var(--bg-elevated) 0%, transparent 40%),
     var(--bg);
 }
 
@@ -117,6 +156,7 @@ nav.tabbar button.active { color: var(--accent); }
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
   background: var(--card);
   border: 1px solid var(--card-border);
   border-radius: var(--radius);
@@ -294,3 +334,36 @@ button.block { width: 100%; margin-bottom: 8px; }
   border: 1px solid var(--card-border);
   color: var(--text);
 }
+
+.avatar-circle {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(160deg, var(--accent-soft), var(--bg-elevated));
+  border: 2px solid var(--accent);
+  font-size: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex: none;
+}
+.avatar-circle.small {
+  width: 40px; height: 40px;
+  font-size: 20px;
+  border-width: 1px;
+  cursor: default;
+}
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.emoji-choice {
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  font-size: 20px;
+  padding: 8px 0;
+  cursor: pointer;
+}
+.dice-btn { min-width: 52px; text-align: center; }
