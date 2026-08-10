@@ -26,6 +26,7 @@
 <header class="topbar">
   <h1 id="headerTitle">Персонажи</h1>
   <div class="row" style="flex:none;gap:2px">
+    <button class="icon-btn" id="rulesBtn" title="Правила онлайн">📖</button>
     <button class="icon-btn" id="battleBtn" title="Бой">⚔️</button>
     <button class="icon-btn" id="diceBtn" title="Кубики">🎲</button>
     <button class="icon-btn" id="settingsBtn" title="Настройки">⚙️</button>
@@ -199,17 +200,20 @@
 
     <div class="card">
       <h3>Классовые умения <button type="button" class="expand-btn" data-target="sheetClassFeatures">⤢ Развернуть</button></h3>
-      <textarea id="sheetClassFeatures" placeholder="Умения класса, полученные на текущем уровне"></textarea>
+      <div class="rich-toolbar" data-target="sheetClassFeatures"></div>
+      <div class="rich-editable" id="sheetClassFeatures" contenteditable="true" data-placeholder="Умения класса, полученные на текущем уровне"></div>
     </div>
 
     <div class="card">
       <h3>Расовые особенности <button type="button" class="expand-btn" data-target="sheetRacialTraits">⤢ Развернуть</button></h3>
-      <textarea id="sheetRacialTraits" placeholder="Особенности расы"></textarea>
+      <div class="rich-toolbar" data-target="sheetRacialTraits"></div>
+      <div class="rich-editable" id="sheetRacialTraits" contenteditable="true" data-placeholder="Особенности расы"></div>
     </div>
 
     <div class="card">
       <h3>Черты <button type="button" class="expand-btn" data-target="sheetFeats">⤢ Развернуть</button></h3>
-      <textarea id="sheetFeats" placeholder="Черты персонажа"></textarea>
+      <div class="rich-toolbar" data-target="sheetFeats"></div>
+      <div class="rich-editable" id="sheetFeats" contenteditable="true" data-placeholder="Черты персонажа"></div>
     </div>
 
     <div class="card">
@@ -231,20 +235,24 @@
       <div id="sheetSpellsKnown"></div>
       <button class="secondary block" id="addSpellFromCatalog">+ Добавить заклинание из каталога</button>
       <label style="margin-top:8px;display:flex;justify-content:space-between;align-items:center">Способности класса, прочие заметки о магии <button type="button" class="expand-btn" data-target="sheetSpells">⤢</button></label>
-      <textarea id="sheetSpells" placeholder="Способности класса, заговоры по расе и т.п."></textarea>
+      <div class="rich-toolbar" data-target="sheetSpells"></div>
+      <div class="rich-editable" id="sheetSpells" contenteditable="true" data-placeholder="Способности класса, заговоры по расе и т.п."></div>
     </div>
 
     <div class="card">
       <h3>Внешность и предыстория</h3>
       <label style="display:flex;justify-content:space-between;align-items:center">Внешность <button type="button" class="expand-btn" data-target="sheetAppearance">⤢</button></label>
-      <textarea id="sheetAppearance" placeholder="Как выглядит персонаж"></textarea>
-      <label style="display:flex;justify-content:space-between;align-items:center">Предыстория и личность <button type="button" class="expand-btn" data-target="sheetBackstory">⤢</button></label>
-      <textarea id="sheetBackstory" placeholder="История персонажа, черты характера, идеалы, узы, слабости"></textarea>
+      <div class="rich-toolbar" data-target="sheetAppearance"></div>
+      <div class="rich-editable" id="sheetAppearance" contenteditable="true" data-placeholder="Как выглядит персонаж"></div>
+      <label style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">Предыстория и личность <button type="button" class="expand-btn" data-target="sheetBackstory">⤢</button></label>
+      <div class="rich-toolbar" data-target="sheetBackstory"></div>
+      <div class="rich-editable" id="sheetBackstory" contenteditable="true" data-placeholder="История персонажа, черты характера, идеалы, узы, слабости"></div>
     </div>
 
     <div class="card">
       <h3>Заметки <button type="button" class="expand-btn" data-target="sheetNotes">⤢ Развернуть</button></h3>
-      <textarea id="sheetNotes" placeholder="Свободные заметки"></textarea>
+      <div class="rich-toolbar" data-target="sheetNotes"></div>
+      <div class="rich-editable" id="sheetNotes" contenteditable="true" data-placeholder="Свободные заметки"></div>
     </div>
   </section>
 
@@ -298,6 +306,13 @@
 
   <!-- ===== SETTINGS VIEW ===== -->
   <section class="view" id="view-settings">
+    <div class="card">
+      <h3>Справочник по правилам</h3>
+      <p style="color:var(--text-dim);font-size:13px;margin-top:0">
+        Полные правила D&D 5e онлайн — если нужно свериться с чем-то, чего нет в приложении.
+      </p>
+      <button class="primary block" id="rulesLinkBtn">📖 Открыть next.dnd.su</button>
+    </div>
     <div class="card">
       <h3>Оформление</h3>
       <div class="chip-row" id="themeChips"></div>

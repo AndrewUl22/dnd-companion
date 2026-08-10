@@ -191,6 +191,68 @@ input, select, textarea {
   font-family: inherit;
 }
 textarea { min-height: 110px; resize: vertical; }
+
+/* ===== Форматируемый текст (жирный/цвет) вместо обычных textarea ===== */
+.rich-toolbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.rich-toolbar button {
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rich-toolbar button.bold-btn {
+  font-weight: 800;
+  color: var(--text);
+  font-size: 14px;
+}
+.rich-toolbar button.color-swatch {
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+}
+.rich-toolbar button.clear-btn {
+  font-size: 11px;
+  color: var(--text-dim);
+  width: auto;
+  padding: 0 8px;
+}
+.rich-editable {
+  width: 100%;
+  min-height: 110px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 9px 11px;
+  font-size: 14px;
+  margin-bottom: 10px;
+  font-family: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-y: auto;
+}
+.rich-editable:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+.rich-editable:focus { outline: 1px solid var(--accent); }
+.expanded-editor-rich {
+  width: 100%;
+  min-height: 55vh;
+  font-size: 15px;
+}
 label { font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 4px; }
 
 /* ===== Кастомные цветные чекбоксы ===== */

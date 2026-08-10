@@ -96,6 +96,7 @@ document.querySelectorAll('nav.tabbar button').forEach(btn => {
 
 document.getElementById('settingsBtn').addEventListener('click', () => switchView('settings'));
 document.getElementById('battleBtn').addEventListener('click', () => switchView('battle'));
+document.getElementById('rulesBtn').addEventListener('click', () => window.open('https://next.dnd.su/', '_blank', 'noopener'));
 
 document.getElementById('fabAdd').addEventListener('click', () => {
   if (activeView === 'characters') openCharacterForm();
@@ -437,13 +438,13 @@ function openCharacter(id) {
   document.getElementById('sheetWeaponProf').value = c.weaponProf;
   document.getElementById('sheetToolProf').value = c.toolProf;
   document.getElementById('sheetLanguages').value = c.languages;
-  document.getElementById('sheetClassFeatures').value = c.classFeatures;
-  document.getElementById('sheetRacialTraits').value = c.racialTraits;
-  document.getElementById('sheetFeats').value = c.feats;
-  document.getElementById('sheetAppearance').value = c.appearance;
-  document.getElementById('sheetBackstory').value = c.backstory;
-  document.getElementById('sheetSpells').value = c.spells;
-  document.getElementById('sheetNotes').value = c.notes;
+  document.getElementById('sheetClassFeatures').innerHTML = c.classFeatures || '';
+  document.getElementById('sheetRacialTraits').innerHTML = c.racialTraits || '';
+  document.getElementById('sheetFeats').innerHTML = c.feats || '';
+  document.getElementById('sheetAppearance').innerHTML = c.appearance || '';
+  document.getElementById('sheetBackstory').innerHTML = c.backstory || '';
+  document.getElementById('sheetSpells').innerHTML = c.spells || '';
+  document.getElementById('sheetNotes').innerHTML = c.notes || '';
   document.getElementById('cCp').value = c.currency.cp;
   document.getElementById('cSp').value = c.currency.sp;
   document.getElementById('cEp').value = c.currency.ep;
@@ -506,6 +507,7 @@ function renderAbilityGrid(c) {
       renderSkills(c);
       renderSaves(c);
       updateComputedStats(c);
+      updateTotalAC(c);
     });
   });
 }
@@ -640,9 +642,13 @@ function renderInventory(c) {
     return;
   }
   wrap.innerHTML = c.inventory.map((it, idx) => {
-    const canEquip = !!it.acBonus || !!it.atkBonus;
+    const slot = it.armorSlot || (it.acBonus ? 'flat' : 'none'); // обратная совместимость со старыми записями
+    const canEquip = slot !== 'none' || !!it.atkBonus;
     const bonusParts = [];
-    if (it.acBonus) bonusParts.push('КД +' + it.acBonus);
+    if (slot === 'light') bonusParts.push('КД ' + (it.armorBaseAC || 0) + '+Лов');
+    else if (slot === 'medium') bonusParts.push('КД ' + (it.armorBaseAC || 0) + '+Лов(макс2)');
+    else if (slot === 'heavy') bonusParts.push('КД ' + (it.armorBaseAC || 0));
+    else if (slot === 'flat' && it.acBonus) bonusParts.push('КД +' + it.acBonus);
     if (it.atkBonus) bonusParts.push('Атака +' + it.atkBonus);
     return `
     <div class="inv-item">
@@ -675,12 +681,28 @@ function renderInventory(c) {
   updateTotalAC(c);
 }
 
+const ARMOR_DEX_CAP = { light: Infinity, medium: 2, heavy: 0 };
+
 function updateTotalAC(c) {
   const equipped = (c.inventory || []).filter(i => i.equipped);
-  const acBonus = equipped.reduce((sum, i) => sum + (i.acBonus || 0), 0);
+  const dexMod = mod(c.abilities.dex);
+  // Надетая базовая броня (лёгкая/средняя/тяжёлая) заменяет ручной "Базовый КД", а не складывается с ним
+  const bodyArmor = equipped.find(i => ['light', 'medium', 'heavy'].includes(i.armorSlot));
+  let baseAC;
+  if (bodyArmor) {
+    const cap = ARMOR_DEX_CAP[bodyArmor.armorSlot];
+    baseAC = (bodyArmor.armorBaseAC || 0) + Math.max(-Infinity, Math.min(dexMod, cap));
+  } else {
+    baseAC = parseInt(c.ac) || 0;
+  }
+  // Фиксированные бонусы (щиты, кольца и т.п. + старые записи без armorSlot) складываются поверх
+  const flatBonus = equipped
+    .filter(i => (i.armorSlot || (i.acBonus ? 'flat' : 'none')) === 'flat')
+    .reduce((sum, i) => sum + (i.acBonus || 0), 0);
   const atkBonus = equipped.reduce((sum, i) => sum + (i.atkBonus || 0), 0);
+
   const el = document.getElementById('totalACDisplay');
-  if (el) el.textContent = (parseInt(c.ac) || 0) + acBonus;
+  if (el) el.textContent = baseAC + flatBonus;
   const atkEl = document.getElementById('equipAtkBonusDisplay');
   if (atkEl) atkEl.textContent = atkBonus > 0 ? ('Бонус атаки от снаряжения: +' + atkBonus) : '';
 }
@@ -693,7 +715,7 @@ document.getElementById('addInvFromCatalog').addEventListener('click', () => {
       const c = getChar(currentCharId);
       const existing = c.inventory.find(i => i.itemId === item.id);
       if (existing) existing.qty++;
-      else c.inventory.push({ itemId: item.id, name: item.name, type: item.type, qty: 1, acBonus: item.acBonus || 0, atkBonus: item.atkBonus || 0, equipped: false });
+      else c.inventory.push({ itemId: item.id, name: item.name, type: item.type, qty: 1, armorSlot: item.armorSlot || 'none', armorBaseAC: item.armorBaseAC || 0, acBonus: item.acBonus || 0, atkBonus: item.atkBonus || 0, equipped: false });
       saveState();
       renderInventory(c);
     },
@@ -705,12 +727,9 @@ document.getElementById('addInvFromCatalog').addEventListener('click', () => {
 [
   ['sheetName', 'name'], ['sheetLevel', 'level'], ['sheetBackground', 'background'],
   ['sheetAC', 'ac'], ['sheetSpeed', 'speed'], ['sheetProf', 'prof'],
-  ['sheetSpells', 'spells'], ['sheetNotes', 'notes'],
   ['sheetSubclass', 'subclass'], ['sheetXP', 'xp'], ['sheetAlignment', 'alignment'],
   ['sheetHitDiceTotal', ['hitDice', 'total']], ['sheetHitDiceUsed', ['hitDice', 'used']],
-  ['sheetWeaponProf', 'weaponProf'], ['sheetToolProf', 'toolProf'], ['sheetLanguages', 'languages'],
-  ['sheetClassFeatures', 'classFeatures'], ['sheetRacialTraits', 'racialTraits'], ['sheetFeats', 'feats'],
-  ['sheetAppearance', 'appearance'], ['sheetBackstory', 'backstory']
+  ['sheetWeaponProf', 'weaponProf'], ['sheetToolProf', 'toolProf'], ['sheetLanguages', 'languages']
 ].forEach(([elId, field]) => {
   document.getElementById(elId).addEventListener('input', () => {
     const c = getChar(currentCharId);
@@ -725,6 +744,45 @@ document.getElementById('addInvFromCatalog').addEventListener('click', () => {
     if (field === 'prof') { renderSaves(c); renderSkills(c); updateComputedStats(c); }
   });
 });
+
+// Форматируемые поля (contenteditable) — сохраняем HTML вместо простого текста
+[
+  ['sheetSpells', 'spells'], ['sheetNotes', 'notes'],
+  ['sheetClassFeatures', 'classFeatures'], ['sheetRacialTraits', 'racialTraits'], ['sheetFeats', 'feats'],
+  ['sheetAppearance', 'appearance'], ['sheetBackstory', 'backstory']
+].forEach(([elId, field]) => {
+  document.getElementById(elId).addEventListener('input', () => {
+    const c = getChar(currentCharId);
+    if (!c) return;
+    c[field] = document.getElementById(elId).innerHTML;
+    saveState();
+  });
+});
+
+// Панели форматирования: жирный + цвета для полей выше
+function bindRichToolbars() {
+  const colors = ['#d4af6e', '#e07a7a', '#7cb88a', '#6fa9e0', '#e0bd82'];
+  document.querySelectorAll('.rich-toolbar').forEach(bar => {
+    if (bar.dataset.bound) return;
+    bar.dataset.bound = '1';
+    const targetId = bar.dataset.target;
+    const swatches = colors.map(c => `<button type="button" class="color-swatch" data-color="${c}" style="background:${c}"></button>`).join('');
+    bar.innerHTML = `<button type="button" class="bold-btn" title="Жирный">Ж</button>${swatches}<button type="button" class="clear-btn" title="Убрать форматирование">Очистить</button>`;
+    const target = document.getElementById(targetId);
+    bar.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('mousedown', (e) => e.preventDefault()); // не терять выделение текста
+      btn.addEventListener('click', () => {
+        target.focus();
+        if (btn.classList.contains('bold-btn')) document.execCommand('bold');
+        else if (btn.classList.contains('color-swatch')) document.execCommand('foreColor', false, btn.dataset.color);
+        else if (btn.classList.contains('clear-btn')) document.execCommand('removeFormat');
+        target.dispatchEvent(new Event('input'));
+      });
+    });
+  });
+}
+bindRichToolbars();
+
 document.getElementById('sheetSize').addEventListener('change', (e) => {
   getChar(currentCharId).size = e.target.value;
   saveState();
@@ -1236,14 +1294,23 @@ function renderItems() {
   });
 }
 
+function armorSlotDescription(it) {
+  if (it.armorSlot === 'light') return `🛡 КД: ${it.armorBaseAC} + модификатор Ловкости (без ограничения)`;
+  if (it.armorSlot === 'medium') return `🛡 КД: ${it.armorBaseAC} + модификатор Ловкости (максимум +2)`;
+  if (it.armorSlot === 'heavy') return `🛡 КД: ${it.armorBaseAC} (без модификатора Ловкости)`;
+  if (it.armorSlot === 'flat' && it.acBonus) return `🛡 Бонус к КД при экипировке: +${it.acBonus}`;
+  return '';
+}
+
 function openItemDetail(id) {
   const it = state.items.find(x => x.id === id);
   playPageTurn();
   const editBtn = it.custom ? `<button class="secondary block" id="editItem">Редактировать</button><button class="danger block" id="deleteItem">Удалить</button>` : '';
+  const armorDesc = armorSlotDescription(it);
   openModal(it.name, `
     <div class="avatar-circle large" style="margin:0 auto 12px">${avatarInnerHtml(it, defaultItemEmoji(it.name, it.type))}</div>
     <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(it.type)}${it.rarity ? ' · ' + escapeHtml(it.rarity) : ''} · ${escapeHtml(it.weight || '')} · ${escapeHtml(it.cost || '')}</div>
-    ${it.acBonus ? `<div style="margin-bottom:8px">🛡 Бонус к КД при экипировке: +${it.acBonus}</div>` : ''}
+    ${armorDesc ? `<div style="margin-bottom:8px">${armorDesc}</div>` : ''}
     ${it.atkBonus ? `<div style="margin-bottom:8px">⚔️ Бонус к атаке при экипировке: +${it.atkBonus}</div>` : ''}
     <div style="white-space:pre-wrap">${escapeHtml(it.properties || '')}</div>
     ${editBtn}
@@ -1261,10 +1328,13 @@ function openItemDetail(id) {
   }
 }
 
+
 function openItemForm(existing) {
-  const it = existing || { id: uid('i'), name: '', type: '', weight: '', cost: '', properties: '', acBonus: 0, atkBonus: 0, rarity: 'Обычный', avatar: '', custom: true };
+  const it = existing || { id: uid('i'), name: '', type: '', weight: '', cost: '', properties: '', armorSlot: 'none', armorBaseAC: 0, acBonus: 0, atkBonus: 0, rarity: 'Обычный', avatar: '', custom: true };
   if (!it.rarity) it.rarity = 'Обычный';
+  if (!it.armorSlot) it.armorSlot = it.acBonus ? 'flat' : 'none'; // обратная совместимость со старыми предметами
   const rarityOptions = RARITIES.map(r => `<option ${r === it.rarity ? 'selected' : ''}>${r}</option>`).join('');
+  const armorSlotOptions = ARMOR_SLOTS.map(s => `<option value="${s.id}" ${s.id === it.armorSlot ? 'selected' : ''}>${s.label}</option>`).join('');
   openModal(existing ? 'Редактировать предмет' : 'Новый предмет', `
     <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('itAvatar', it, defaultItemEmoji(it.name, it.type), true)}</div>
     <label>Название</label><input id="itName" value="${escapeAttr(it.name)}">
@@ -1275,20 +1345,34 @@ function openItemForm(existing) {
       <div><label>Вес</label><input id="itWeight" value="${escapeAttr(it.weight)}"></div>
       <div><label>Цена</label><input id="itCost" value="${escapeAttr(it.cost)}"></div>
     </div>
+    <label>Влияние на КД при экипировке</label>
+    <select id="itArmorSlot">${armorSlotOptions}</select>
+    <div class="row" id="itArmorBaseRow" style="display:${it.armorSlot === 'light' || it.armorSlot === 'medium' || it.armorSlot === 'heavy' ? 'flex' : 'none'}">
+      <div><label>Базовое значение КД</label><input id="itArmorBaseAC" type="number" value="${it.armorBaseAC || 0}"></div>
+    </div>
+    <div class="row" id="itFlatBonusRow" style="display:${it.armorSlot === 'flat' ? 'flex' : 'none'}">
+      <div><label>Бонус к КД</label><input id="itAcBonus" type="number" value="${it.acBonus || 0}"></div>
+    </div>
     <div class="row">
-      <div><label>Бонус к КД (для брони)</label><input id="itAcBonus" type="number" value="${it.acBonus || 0}"></div>
       <div><label>Бонус к атаке (для оружия)</label><input id="itAtkBonus" type="number" value="${it.atkBonus || 0}"></div>
     </div>
     <label>Свойства / описание</label><textarea id="itProps">${escapeHtml(it.properties)}</textarea>
     <button class="primary block" id="saveItem">Сохранить</button>
   `);
   bindAvatarPicker('itAvatar', it, defaultItemEmoji(it.name, it.type), () => {});
+  document.getElementById('itArmorSlot').addEventListener('change', (e) => {
+    const v = e.target.value;
+    document.getElementById('itArmorBaseRow').style.display = (v === 'light' || v === 'medium' || v === 'heavy') ? 'flex' : 'none';
+    document.getElementById('itFlatBonusRow').style.display = (v === 'flat') ? 'flex' : 'none';
+  });
   document.getElementById('saveItem').addEventListener('click', () => {
     it.name = document.getElementById('itName').value.trim() || 'Без названия';
     it.type = document.getElementById('itType').value.trim() || 'Снаряжение';
     it.rarity = document.getElementById('itRarity').value;
     it.weight = document.getElementById('itWeight').value.trim();
     it.cost = document.getElementById('itCost').value.trim();
+    it.armorSlot = document.getElementById('itArmorSlot').value;
+    it.armorBaseAC = parseInt(document.getElementById('itArmorBaseAC').value) || 0;
     it.acBonus = parseInt(document.getElementById('itAcBonus').value) || 0;
     it.atkBonus = parseInt(document.getElementById('itAtkBonus').value) || 0;
     it.avatar = it.avatar || defaultItemEmoji(document.getElementById('itName').value.trim(), document.getElementById('itType').value.trim());
@@ -1497,6 +1581,8 @@ document.getElementById('resetBtn').addEventListener('click', () => {
 });
 
 // ==================== THEME & SOUND SETTINGS ====================
+document.getElementById('rulesLinkBtn').addEventListener('click', () => window.open('https://next.dnd.su/', '_blank', 'noopener'));
+
 function renderThemeChips() {
   const wrap = document.getElementById('themeChips');
   wrap.innerHTML = THEMES.map(t => `<button class="chip ${state.settings.theme === t.id ? 'active' : ''}" data-theme="${t.id}">${escapeHtml(t.label)}</button>`).join('');
@@ -1577,14 +1663,29 @@ document.querySelectorAll('.expand-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const targetId = btn.dataset.target;
     const source = document.getElementById(targetId);
+    const isRich = source.classList.contains('rich-editable');
     const label = btn.closest('h3, label').textContent.replace('⤢', '').replace('Развернуть', '').trim() || 'Текст';
-    openModal(label, `<textarea id="expandedTextarea" class="expanded-editor-textarea">${escapeHtml(source.value)}</textarea>`);
-    const expanded = document.getElementById('expandedTextarea');
-    expanded.focus();
-    expanded.addEventListener('input', () => {
-      source.value = expanded.value;
-      source.dispatchEvent(new Event('input'));
-    });
+    if (isRich) {
+      openModal(label, `
+        <div class="rich-toolbar" id="expandedToolbar" data-target="expandedRich"></div>
+        <div id="expandedRich" class="rich-editable expanded-editor-rich" contenteditable="true">${source.innerHTML}</div>
+      `);
+      bindRichToolbars();
+      const expanded = document.getElementById('expandedRich');
+      expanded.focus();
+      expanded.addEventListener('input', () => {
+        source.innerHTML = expanded.innerHTML;
+        source.dispatchEvent(new Event('input'));
+      });
+    } else {
+      openModal(label, `<textarea id="expandedTextarea" class="expanded-editor-textarea">${escapeHtml(source.value)}</textarea>`);
+      const expanded = document.getElementById('expandedTextarea');
+      expanded.focus();
+      expanded.addEventListener('input', () => {
+        source.value = expanded.value;
+        source.dispatchEvent(new Event('input'));
+      });
+    }
   });
 });
 
