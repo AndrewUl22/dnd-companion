@@ -168,6 +168,6 @@ const THEMES = [
   { id: "parchment", label: "Пергамент" },
   { id: "midnight", label: "Полночь" },
   { id: "emerald", label: "Изумруд" },
-  { id: "coffee", label: "Кофейная" },
+  { id: "coffee", label: "Серо-чёрная" },
   { id: "ukraine", label: "Україна" }
 ];

@@ -52,29 +52,29 @@ body[data-theme="emerald"] {
 }
 
 body[data-theme="coffee"] {
-  --bg: #2b1d14;
-  --bg-elevated: #3a2818;
-  --card: #46301d;
-  --card-border: #5c4227;
-  --accent: #d9a566;
-  --accent-soft: #d9a56633;
-  --text: #f5e6d3;
-  --text-dim: #c9a884;
-  --danger: #d16565;
-  --success: #8fbf7a;
+  --bg: #1c1c1e;
+  --bg-elevated: #262628;
+  --card: #303032;
+  --card-border: #46464a;
+  --accent: #c9c9cf;
+  --accent-soft: #c9c9cf33;
+  --text: #f0f0f2;
+  --text-dim: #9a9aa0;
+  --danger: #e07a7a;
+  --success: #7cb88a;
 }
 
 body[data-theme="ukraine"] {
-  --bg: #0a2472;
-  --bg-elevated: #123499;
-  --card: #163fae;
-  --card-border: #2854c9;
-  --accent: #ffd500;
-  --accent-soft: #ffd50033;
+  --bg: #2a5cb8;
+  --bg-elevated: #3569c2;
+  --card: #3d72cc;
+  --card-border: #5589d6;
+  --accent: #ffe066;
+  --accent-soft: #ffe06644;
   --text: #ffffff;
-  --text-dim: #cfe0ff;
-  --danger: #ff6b6b;
-  --success: #7cd992;
+  --text-dim: #dce8fb;
+  --danger: #ff8080;
+  --success: #8fe0a8;
 }
 
 * { box-sizing: border-box; }
@@ -91,10 +91,25 @@ html, body {
 body {
   padding-bottom: 72px;
   min-height: 100vh;
+  position: relative;
   background:
     radial-gradient(circle at 20% 0%, var(--card) 0%, transparent 45%),
     radial-gradient(circle at 90% 10%, var(--bg-elevated) 0%, transparent 40%),
     var(--bg);
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: url('icons/icon-splash.png') center 38vh / min(340px, 70vw) no-repeat;
+  opacity: 0.05;
+  filter: grayscale(0.3);
+  pointer-events: none;
+  z-index: 0;
+}
+header.topbar, main, nav.tabbar, .splash, .modal-backdrop, .toast, .fab {
+  position: relative;
+  z-index: 1;
 }
 
 header.topbar {
@@ -692,6 +707,7 @@ button.block { width: 100%; margin-bottom: 8px; }
   object-fit: cover;
 }
 .avatar-circle.small img { width: 100%; height: 100%; }
+.avatar-circle svg { width: 60%; height: 60%; }
 
 .expanded-editor-textarea {
   width: 100%;

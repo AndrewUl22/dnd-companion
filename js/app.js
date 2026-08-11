@@ -180,7 +180,10 @@ function openListPicker(useAux, title, items, rowHtmlFn, onPick, searchFn) {
 // Картинка, если есть, имеет приоритет над эмодзи.
 function avatarInnerHtml(record, fallbackEmoji) {
   if (record && record.avatarImage) return `<img src="${record.avatarImage}" alt="">`;
-  return escapeHtml((record && record.avatar) || fallbackEmoji || '🧙');
+  const val = (record && record.avatar) || fallbackEmoji || '🧙';
+  // Собственные сгенерированные SVG-иконки (CUSTOM_ITEM_ICONS) не экранируем — это не пользовательский ввод
+  if (typeof val === 'string' && val.trim().startsWith('<svg')) return val;
+  return escapeHtml(val);
 }
 function avatarPickerHtml(id, record, fallbackEmoji, large) {
   return `<button type="button" class="avatar-circle${large ? ' large' : ''}" id="${id}">${avatarInnerHtml(record, fallbackEmoji)}</button>`;
@@ -273,12 +276,20 @@ function defaultBeastEmoji(type) {
   if (t.includes('элементал')) return '🔥';
   return '❔';
 }
+// Собственные нарисованные SVG-иконки для предметов, где обычный эмодзи выглядит невыразительно
+const CUSTOM_ITEM_ICONS = {
+  potion: '<svg viewBox="0 0 24 24" width="26" height="26"><path d="M9 2h6v4l4 8a3 3 0 0 1-3 5H8a3 3 0 0 1-3-5l4-8V2z" fill="none" stroke="#d9c39a" stroke-width="1.4"/><path d="M6.3 14.8h11.4L16.3 18.3a3 3 0 0 1-2.8 1.9h-3a3 3 0 0 1-2.8-1.9L6.3 14.8z" fill="#7fd97f"/><rect x="9" y="1.4" width="6" height="2" rx="0.5" fill="#d9c39a"/></svg>',
+  rope: '<svg viewBox="0 0 24 24" width="26" height="26"><circle cx="12" cy="12" r="8.2" fill="none" stroke="#b08050" stroke-width="2.2"/><circle cx="12" cy="12" r="4.6" fill="none" stroke="#8a6238" stroke-width="2.2"/><path d="M12 3.8 L12 0.8" stroke="#8a6238" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  chainmail: '<svg viewBox="0 0 24 24" width="26" height="26"><path d="M6 3 L18 3 L20 9 L18 22 L6 22 L4 9 Z" fill="#8f97a3" stroke="#4d545e" stroke-width="1"/><g stroke="#4d545e" stroke-width="0.6" fill="none"><circle cx="8" cy="7" r="1.3"/><circle cx="12" cy="7" r="1.3"/><circle cx="16" cy="7" r="1.3"/><circle cx="8" cy="11" r="1.3"/><circle cx="12" cy="11" r="1.3"/><circle cx="16" cy="11" r="1.3"/><circle cx="8" cy="15" r="1.3"/><circle cx="12" cy="15" r="1.3"/><circle cx="16" cy="15" r="1.3"/><circle cx="8" cy="19" r="1.3"/><circle cx="12" cy="19" r="1.3"/><circle cx="16" cy="19" r="1.3"/></g></svg>',
+  leatherArmor: '<svg viewBox="0 0 24 24" width="26" height="26"><path d="M6 3 L18 3 L20 9 L18 22 L6 22 L4 9 Z" fill="#8a5a34" stroke="#4a2f18" stroke-width="1"/><path d="M12 4 L12 21" stroke="#4a2f18" stroke-width="1" stroke-dasharray="2 1.5"/><path d="M6 9 L18 9" stroke="#4a2f18" stroke-width="1" stroke-dasharray="2 1.5"/></svg>'
+};
+
 function defaultItemEmoji(name, type) {
   const s = ((name || '') + ' ' + (type || '')).toLowerCase();
   // Сначала — конкретные предметы (точнее общей категории)
-  if (s.includes('зелье') || s.includes('эликсир') || s.includes('снадобье')) return '🧪';
+  if (s.includes('зелье') || s.includes('эликсир') || s.includes('снадобье')) return CUSTOM_ITEM_ICONS.potion;
   if (s.includes('свиток')) return '📜';
-  if (s.includes('верёвк') || s.includes('веревк') || s.includes('канат')) return '🪢';
+  if (s.includes('верёвк') || s.includes('веревк') || s.includes('канат')) return CUSTOM_ITEM_ICONS.rope;
   if (s.includes('посох')) return '🪄';
   if (s.includes('жезл') || s.includes('палочк')) return '🪄';
   if (s.includes('кольц') || s.includes('перстен')) return '💍';
@@ -295,6 +306,8 @@ function defaultItemEmoji(name, type) {
   if (s.includes('топор') || s.includes('секир')) return '🪓';
   if (s.includes('молот') || s.includes('булав')) return '🔨';
   if (s.includes('копь') || s.includes('пик') || s.includes('трезубец')) return '🔱';
+  if (s.includes('кольчуг') || s.includes('пластинчат') || s.includes('латы')) return CUSTOM_ITEM_ICONS.chainmail;
+  if (s.includes('кожан')) return CUSTOM_ITEM_ICONS.leatherArmor;
   if (s.includes('щит')) return '🛡️';
   if (s.includes('шлем') || s.includes('капюшон')) return '⛑️';
   if (s.includes('плащ') || s.includes('мантия') || s.includes('накидк')) return '🧥';
@@ -307,7 +320,7 @@ function defaultItemEmoji(name, type) {
   if (s.includes('драгоц') || s.includes('самоцвет') || s.includes('алмаз') || s.includes('рубин')) return '💎';
   // Затем — общие категории
   if (s.includes('оруж')) return '⚔️';
-  if (s.includes('брон')) return '🛡️';
+  if (s.includes('брон')) return CUSTOM_ITEM_ICONS.chainmail;
   return '🎒';
 }
 
@@ -340,6 +353,7 @@ function newCharacter(name) {
     weaponProf: '', toolProf: '', languages: '',
     attacks: [],
     spellcastingAbility: '',
+    cantripsKnown: 0,
     spellSlots: { 1: { total: 0, used: 0 }, 2: { total: 0, used: 0 }, 3: { total: 0, used: 0 }, 4: { total: 0, used: 0 }, 5: { total: 0, used: 0 }, 6: { total: 0, used: 0 }, 7: { total: 0, used: 0 }, 8: { total: 0, used: 0 }, 9: { total: 0, used: 0 } },
     classFeatures: '', racialTraits: '', feats: '',
     appearance: '', backstory: '',
@@ -408,6 +422,7 @@ function migrateChar(c) {
   if (c.languages === undefined) c.languages = '';
   if (!c.attacks) c.attacks = [];
   if (c.spellcastingAbility === undefined) c.spellcastingAbility = '';
+  if (c.cantripsKnown === undefined) c.cantripsKnown = 0;
   if (!c.spellSlots) c.spellSlots = {};
   for (let lvl = 1; lvl <= 9; lvl++) {
     if (!c.spellSlots[lvl]) c.spellSlots[lvl] = { total: 0, used: 0 };
@@ -463,6 +478,7 @@ function openCharacter(id) {
   document.getElementById('cGp').value = c.currency.gp;
   document.getElementById('cPp').value = c.currency.pp;
   document.getElementById('sheetSpellAbility').value = c.spellcastingAbility;
+  document.getElementById('sheetCantripsKnown').value = c.cantripsKnown;
 
   renderAbilityGrid(c);
   renderSaves(c);
@@ -503,6 +519,11 @@ document.getElementById('sheetSpellAbility').addEventListener('change', (e) => {
   c.spellcastingAbility = e.target.value;
   saveState();
   updateSpellcastingStats(c);
+});
+document.getElementById('sheetCantripsKnown').addEventListener('input', (e) => {
+  const c = getChar(currentCharId);
+  c.cantripsKnown = Math.max(0, parseInt(e.target.value) || 0);
+  saveState();
 });
 
 function renderSpellSlots(c) {
@@ -552,7 +573,7 @@ function populateRaceClassOptions() {
   classList.innerHTML = [...DEFAULT_CLASSES, ...state.customClasses].map(cl => `<option value="${escapeAttr(cl)}">`).join('');
 }
 
-const CHAR_COLOR_PALETTE = ['', '#d4af6e', '#e07a7a', '#7cb88a', '#6fa9e0', '#a67ce0', '#e0955a'];
+const CHAR_COLOR_PALETTE = ['', '#e07a7a', '#7cb88a', '#6fa9e0', '#a67ce0', '#e0955a'];
 function renderCharColorSwatches(c) {
   const wrap = document.getElementById('charColorSwatches');
   wrap.innerHTML = CHAR_COLOR_PALETTE.map(col => {
@@ -875,29 +896,50 @@ function bindRichToolbars() {
       <button type="button" class="clear-btn" title="Убрать форматирование">Очистить</button>
     `;
     const target = document.getElementById(targetId);
+    let savedRange = null;
 
+    function saveSelection() {
+      const sel = window.getSelection();
+      if (sel.rangeCount && target.contains(sel.anchorNode)) savedRange = sel.getRangeAt(0).cloneRange();
+    }
+    function restoreSelection() {
+      if (!savedRange) return;
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(savedRange);
+    }
+    function hexToRgb(hex) {
+      const n = parseInt(hex.replace('#', ''), 16);
+      return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+    }
     function updateActiveStates() {
       try {
         bar.querySelector('.bold-btn').classList.toggle('is-active', document.queryCommandState('bold'));
         bar.querySelector('.italic-btn').classList.toggle('is-active', document.queryCommandState('italic'));
         bar.querySelector('.underline-btn').classList.toggle('is-active', document.queryCommandState('underline'));
+        const curColor = document.queryCommandValue('foreColor');
+        bar.querySelectorAll('.color-swatch').forEach(sw => {
+          sw.classList.toggle('is-selected', curColor === hexToRgb(sw.dataset.color));
+        });
       } catch (e) { /* игнорируем, если команда недоступна вне фокуса */ }
     }
-    target.addEventListener('keyup', updateActiveStates);
-    target.addEventListener('mouseup', updateActiveStates);
+    target.addEventListener('keyup', () => { saveSelection(); updateActiveStates(); });
+    target.addEventListener('mouseup', () => { saveSelection(); updateActiveStates(); });
     target.addEventListener('focus', updateActiveStates);
     document.addEventListener('selectionchange', () => {
-      if (document.activeElement === target) updateActiveStates();
+      if (document.activeElement === target) { saveSelection(); updateActiveStates(); }
     });
 
-    bar.querySelectorAll('button, select').forEach(el => {
+    bar.querySelectorAll('button').forEach(el => {
       el.addEventListener('mousedown', (e) => e.preventDefault()); // не терять выделение текста
     });
     bar.querySelectorAll('.fmt-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         target.focus();
+        restoreSelection();
         document.execCommand(btn.dataset.cmd);
         target.dispatchEvent(new Event('input'));
+        saveSelection();
         updateActiveStates();
         playFormatClick();
       });
@@ -905,31 +947,42 @@ function bindRichToolbars() {
     bar.querySelectorAll('.color-swatch').forEach(btn => {
       btn.addEventListener('click', () => {
         target.focus();
+        restoreSelection();
         document.execCommand('foreColor', false, btn.dataset.color);
         target.dispatchEvent(new Event('input'));
+        saveSelection();
+        updateActiveStates();
         playFormatClick();
       });
     });
+    bar.querySelector('.fmt-size-select').addEventListener('mousedown', () => saveSelection());
     bar.querySelector('.fmt-size-select').addEventListener('change', (e) => {
       target.focus();
+      restoreSelection();
       document.execCommand('fontSize', false, e.target.value);
       target.dispatchEvent(new Event('input'));
+      saveSelection();
       playFormatClick();
     });
     bar.querySelector('.clear-btn').addEventListener('click', () => {
       target.focus();
+      restoreSelection();
       document.execCommand('removeFormat');
       target.dispatchEvent(new Event('input'));
+      saveSelection();
       updateActiveStates();
       playFormatClick();
     });
     bar.querySelector('.link-btn').addEventListener('click', () => {
       const savedTarget = target;
+      saveSelection();
+      const rangeAtClick = savedRange;
       if (!state.characters.length) { showToast('Пока нет других персонажей для ссылки'); return; }
       openListPicker(false, 'Ссылка на персонажа', state.characters,
         (ch) => `<div class="avatar-circle small">${avatarInnerHtml(ch, '🧙')}</div><div style="flex:1"><div>${escapeHtml(ch.name)}</div><div class="meta">${escapeHtml(ch.race)} · ${escapeHtml(ch.class)}</div></div>`,
         (ch) => {
           savedTarget.focus();
+          if (rangeAtClick) { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(rangeAtClick); }
           document.execCommand('insertHTML', false, `<span class="char-link" contenteditable="false" data-char-id="${ch.id}">🔗 ${escapeHtml(ch.name)}</span>&nbsp;`);
           savedTarget.dispatchEvent(new Event('input'));
           playFormatClick();
@@ -1878,14 +1931,19 @@ function escapeAttr(str) { return escapeHtml(str); }
   }, { once: true });
 })();
 
-// Клик по ссылке-персонажу внутри форматируемого текста — открывает его лист
-document.addEventListener('click', (e) => {
+// Клик по ссылке-персонажу внутри форматируемого текста — открывает его лист.
+// pointerup работает надёжнее, чем click, внутри contenteditable-полей на телефонах
+// (обычный click там часто "съедается" установкой курсора вместо перехода по ссылке).
+function handleCharLinkTap(e) {
   const link = e.target.closest('.char-link');
   if (link && state.characters.find(x => x.id === link.dataset.charId)) {
+    e.preventDefault();
     closeModal();
     openCharacter(link.dataset.charId);
   }
-});
+}
+document.addEventListener('pointerup', handleCharLinkTap);
+document.addEventListener('click', handleCharLinkTap);
 
 // Числовые поля: выделяем текущее значение целиком при фокусе,
 // чтобы ввод новой цифры не превращался в "03" или "103"
