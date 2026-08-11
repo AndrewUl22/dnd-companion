@@ -279,7 +279,7 @@ function defaultBeastEmoji(type) {
 // Собственные нарисованные SVG-иконки для предметов, где обычный эмодзи выглядит невыразительно
 const CUSTOM_ITEM_ICONS = {
   potion: '<svg viewBox="0 0 24 24" width="26" height="26"><path d="M9 2h6v4l4 8a3 3 0 0 1-3 5H8a3 3 0 0 1-3-5l4-8V2z" fill="none" stroke="#d9c39a" stroke-width="1.4"/><path d="M6.3 14.8h11.4L16.3 18.3a3 3 0 0 1-2.8 1.9h-3a3 3 0 0 1-2.8-1.9L6.3 14.8z" fill="#7fd97f"/><rect x="9" y="1.4" width="6" height="2" rx="0.5" fill="#d9c39a"/></svg>',
-  rope: '<svg viewBox="0 0 24 24" width="26" height="26"><circle cx="12" cy="12" r="8.2" fill="none" stroke="#b08050" stroke-width="2.2"/><circle cx="12" cy="12" r="4.6" fill="none" stroke="#8a6238" stroke-width="2.2"/><path d="M12 3.8 L12 0.8" stroke="#8a6238" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  rope: '<svg viewBox="0 0 100 100" width="26" height="26"><g stroke="#2b1c10" stroke-width="13" stroke-linecap="round" fill="none"><path d="M70 8 C88 8 92 28 78 38 C64 48 50 40 50 40"/><path d="M50 40 C35 30 20 40 15 55 C9 72 22 90 38 88 C54 86 58 68 50 40"/><path d="M50 40 L58 62"/><path d="M42 34 L60 56"/><path d="M36 44 L54 66"/><path d="M30 54 L48 76"/></g><g stroke="#8a5a34" stroke-width="9" stroke-linecap="round" fill="none"><path d="M70 8 C88 8 92 28 78 38 C64 48 50 40 50 40"/><path d="M50 40 C35 30 20 40 15 55 C9 72 22 90 38 88 C54 86 58 68 50 40"/></g><g stroke="#a5713f" stroke-width="7" stroke-linecap="round" fill="none"><path d="M50 40 L58 62"/><path d="M42 34 L60 56"/><path d="M36 44 L54 66"/><path d="M30 54 L48 76"/></g></svg>',
   chainmail: '<svg viewBox="0 0 24 24" width="26" height="26"><path d="M6 3 L18 3 L20 9 L18 22 L6 22 L4 9 Z" fill="#8f97a3" stroke="#4d545e" stroke-width="1"/><g stroke="#4d545e" stroke-width="0.6" fill="none"><circle cx="8" cy="7" r="1.3"/><circle cx="12" cy="7" r="1.3"/><circle cx="16" cy="7" r="1.3"/><circle cx="8" cy="11" r="1.3"/><circle cx="12" cy="11" r="1.3"/><circle cx="16" cy="11" r="1.3"/><circle cx="8" cy="15" r="1.3"/><circle cx="12" cy="15" r="1.3"/><circle cx="16" cy="15" r="1.3"/><circle cx="8" cy="19" r="1.3"/><circle cx="12" cy="19" r="1.3"/><circle cx="16" cy="19" r="1.3"/></g></svg>',
   leatherArmor: '<svg viewBox="0 0 24 24" width="26" height="26"><path d="M6 3 L18 3 L20 9 L18 22 L6 22 L4 9 Z" fill="#8a5a34" stroke="#4a2f18" stroke-width="1"/><path d="M12 4 L12 21" stroke="#4a2f18" stroke-width="1" stroke-dasharray="2 1.5"/><path d="M6 9 L18 9" stroke="#4a2f18" stroke-width="1" stroke-dasharray="2 1.5"/></svg>'
 };
@@ -868,8 +868,19 @@ document.getElementById('addInvFromCatalog').addEventListener('click', () => {
   document.getElementById(elId).addEventListener('input', () => {
     const c = getChar(currentCharId);
     if (!c) return;
-    c[field] = document.getElementById(elId).innerHTML;
+    const el = document.getElementById(elId);
+    c[field] = el.innerHTML;
     saveState();
+    // Если поле полностью очищено — сбрасываем размер шрифта в панели обратно на "Обычный",
+    // иначе новый набранный текст визуально мелкий, а селектор всё ещё показывает старый уровень
+    if (el.textContent.trim() === '') {
+      const bar = document.querySelector(`.rich-toolbar[data-target="${elId}"]`);
+      if (bar) {
+        const sel = bar.querySelector('.fmt-size-select');
+        if (sel) sel.value = '3';
+      }
+      try { document.execCommand('removeFormat'); } catch (e) { /* игнорируем */ }
+    }
   });
 });
 
@@ -892,7 +903,8 @@ function bindRichToolbars() {
         <option value="6">Уровень 3</option>
       </select>
       ${swatches}
-      <button type="button" class="link-btn" title="Ссылка на персонажа">🔗</button>
+      <button type="button" class="anchor-btn" title="Пометить выделенный текст как метку">#</button>
+      <button type="button" class="jump-btn" title="Перейти к метке">🔍</button>
       <button type="button" class="clear-btn" title="Убрать форматирование">Очистить</button>
     `;
     const target = document.getElementById(targetId);
@@ -973,19 +985,32 @@ function bindRichToolbars() {
       updateActiveStates();
       playFormatClick();
     });
-    bar.querySelector('.link-btn').addEventListener('click', () => {
-      const savedTarget = target;
+    bar.querySelector('.anchor-btn').addEventListener('click', () => {
+      if (!savedRange || savedRange.collapsed) {
+        showToast('Сначала выделите текст — например, название умения');
+        return;
+      }
+      target.focus();
+      restoreSelection();
+      const text = window.getSelection().toString();
+      if (!text.trim()) { showToast('Сначала выделите текст — например, название умения'); return; }
+      document.execCommand('insertHTML', false, `<span class="text-anchor">${escapeHtml(text)}</span>`);
+      target.dispatchEvent(new Event('input'));
       saveSelection();
-      const rangeAtClick = savedRange;
-      if (!state.characters.length) { showToast('Пока нет других персонажей для ссылки'); return; }
-      openListPicker(false, 'Ссылка на персонажа', state.characters,
-        (ch) => `<div class="avatar-circle small">${avatarInnerHtml(ch, '🧙')}</div><div style="flex:1"><div>${escapeHtml(ch.name)}</div><div class="meta">${escapeHtml(ch.race)} · ${escapeHtml(ch.class)}</div></div>`,
-        (ch) => {
-          savedTarget.focus();
-          if (rangeAtClick) { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(rangeAtClick); }
-          document.execCommand('insertHTML', false, `<span class="char-link" contenteditable="false" data-char-id="${ch.id}">🔗 ${escapeHtml(ch.name)}</span>&nbsp;`);
-          savedTarget.dispatchEvent(new Event('input'));
-          playFormatClick();
+      playFormatClick();
+      showToast('Метка добавлена — теперь можно быстро перейти к ней через 🔍');
+    });
+    bar.querySelector('.jump-btn').addEventListener('click', () => {
+      const anchors = Array.from(target.querySelectorAll('.text-anchor'));
+      if (!anchors.length) { showToast('Пока нет меток — выделите текст и нажмите #'); return; }
+      const items = anchors.map(el => ({ el, text: el.textContent }));
+      openListPicker(false, 'Перейти к метке', items,
+        (item) => `<div style="flex:1">${escapeHtml(item.text)}</div>`,
+        (item) => {
+          target.focus();
+          target.scrollTop = Math.max(0, item.el.offsetTop - target.offsetTop - 10);
+          item.el.classList.add('anchor-flash');
+          setTimeout(() => item.el.classList.remove('anchor-flash'), 1400);
         }
       );
     });
@@ -1930,20 +1955,6 @@ function escapeAttr(str) { return escapeHtml(str); }
     document.removeEventListener('pointerdown', unlockAudioOnce);
   }, { once: true });
 })();
-
-// Клик по ссылке-персонажу внутри форматируемого текста — открывает его лист.
-// pointerup работает надёжнее, чем click, внутри contenteditable-полей на телефонах
-// (обычный click там часто "съедается" установкой курсора вместо перехода по ссылке).
-function handleCharLinkTap(e) {
-  const link = e.target.closest('.char-link');
-  if (link && state.characters.find(x => x.id === link.dataset.charId)) {
-    e.preventDefault();
-    closeModal();
-    openCharacter(link.dataset.charId);
-  }
-}
-document.addEventListener('pointerup', handleCharLinkTap);
-document.addEventListener('click', handleCharLinkTap);
 
 // Числовые поля: выделяем текущее значение целиком при фокусе,
 // чтобы ввод новой цифры не превращался в "03" или "103"
