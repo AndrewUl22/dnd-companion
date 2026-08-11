@@ -167,5 +167,7 @@ const THEMES = [
   { id: "dark", label: "Тёмное фэнтези" },
   { id: "parchment", label: "Пергамент" },
   { id: "midnight", label: "Полночь" },
-  { id: "emerald", label: "Изумруд" }
+  { id: "emerald", label: "Изумруд" },
+  { id: "coffee", label: "Кофейная" },
+  { id: "ukraine", label: "Україна" }
 ];

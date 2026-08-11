@@ -177,7 +177,25 @@ function playSplashDiceLand() {
     });
   } catch (e) { /* игнорируем */ }
 }
-// Мягкий "лист бумаги": используется при открытии карточек
+// Короткий тихий "клик" для кнопок форматирования текста
+function playFormatClick() {
+  if (!soundsEnabled()) return;
+  try {
+    const ctx = getAudioCtx();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, now);
+    osc.frequency.exponentialRampToValueAtTime(1200, now + 0.05);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.05, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.1);
+  } catch (e) { /* игнорируем */ }
+}
 function playPageTurn() {
   if (!soundsEnabled()) return;
   try {

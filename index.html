@@ -52,6 +52,8 @@
       <div style="text-align:center;margin-bottom:12px">
         <button type="button" class="avatar-circle large" id="sheetAvatar" data-current="🧙">🧙</button>
       </div>
+      <label style="text-align:center">Цвет имени персонажа</label>
+      <div class="chip-row" id="charColorSwatches" style="justify-content:center"></div>
       <label>Имя персонажа</label>
       <input id="sheetName" placeholder="Имя">
       <div class="row">
@@ -228,6 +230,36 @@
         <div><label>ЗМ</label><input id="cGp" type="number" value="0"></div>
         <div><label>ПМ</label><input id="cPp" type="number" value="0"></div>
       </div>
+    </div>
+
+    <div class="card">
+      <h3>Заклинательство</h3>
+      <label>Базовая характеристика</label>
+      <select id="sheetSpellAbility">
+        <option value="">Не заклинатель</option>
+        <option value="str">Сила</option>
+        <option value="dex">Ловкость</option>
+        <option value="con">Телосложение</option>
+        <option value="int">Интеллект</option>
+        <option value="wis">Мудрость</option>
+        <option value="cha">Харизма</option>
+      </select>
+      <div class="row">
+        <div class="ability-box" style="padding:10px">
+          <div class="label">Модификатор</div>
+          <div class="score" id="spellModDisplay">+0</div>
+        </div>
+        <div class="ability-box" style="padding:10px">
+          <div class="label">Сложн. спасброска</div>
+          <div class="score" id="spellDcDisplay">10</div>
+        </div>
+        <div class="ability-box" style="padding:10px">
+          <div class="label">Бонус атаки</div>
+          <div class="score" id="spellAtkDisplay">+0</div>
+        </div>
+      </div>
+      <label style="margin-top:10px">Ячейки заклинаний</label>
+      <div id="spellSlotsGrid"></div>
     </div>
 
     <div class="card">

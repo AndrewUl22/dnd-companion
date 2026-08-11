@@ -81,6 +81,7 @@ function switchView(view) {
     settings: 'Настройки', battle: 'Бой', sheet: currentCharId ? getChar(currentCharId).name || 'Персонаж' : 'Персонаж'
   };
   document.getElementById('headerTitle').textContent = titles[view] || 'DnD Companion';
+  document.getElementById('headerTitle').style.color = (view === 'sheet' && currentCharId && getChar(currentCharId).nameColor) ? getChar(currentCharId).nameColor : '';
   document.getElementById('fabAdd').style.display = (view === 'sheet' || view === 'settings') ? 'none' : 'flex';
 
   if (view === 'characters') renderCharList();
@@ -318,6 +319,7 @@ function newCharacter(name) {
     id: uid('c'),
     name: name || 'Новый персонаж',
     avatar: '🧙',
+    nameColor: '',
     race: DEFAULT_RACES[0],
     class: DEFAULT_CLASSES[0],
     subclass: '',
@@ -337,6 +339,8 @@ function newCharacter(name) {
     armorProf: { light: false, medium: false, heavy: false, shield: false },
     weaponProf: '', toolProf: '', languages: '',
     attacks: [],
+    spellcastingAbility: '',
+    spellSlots: { 1: { total: 0, used: 0 }, 2: { total: 0, used: 0 }, 3: { total: 0, used: 0 }, 4: { total: 0, used: 0 }, 5: { total: 0, used: 0 }, 6: { total: 0, used: 0 }, 7: { total: 0, used: 0 }, 8: { total: 0, used: 0 }, 9: { total: 0, used: 0 } },
     classFeatures: '', racialTraits: '', feats: '',
     appearance: '', backstory: '',
     currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
@@ -377,7 +381,7 @@ function renderCharList() {
         <div class="avatar-circle small">${avatarInnerHtml(c, '🧙')}</div>
       </div>
       <div style="flex:1">
-        <div>${escapeHtml(c.name)}</div>
+        <div${c.nameColor ? ` style="color:${c.nameColor}"` : ''}>${escapeHtml(c.name)}</div>
         <div class="meta">${escapeHtml(c.race)} · ${escapeHtml(c.class)} · ур. ${c.level}</div>
       </div>
       <span class="badge">${c.hp.current}/${c.hp.max} ХП</span>
@@ -388,6 +392,7 @@ function renderCharList() {
 }
 
 function migrateChar(c) {
+  if (c.nameColor === undefined) c.nameColor = '';
   if (!c.subclass) c.subclass = c.subclass || '';
   if (c.xp === undefined) c.xp = 0;
   if (!c.alignment) c.alignment = c.alignment || '';
@@ -402,6 +407,11 @@ function migrateChar(c) {
   if (c.toolProf === undefined) c.toolProf = '';
   if (c.languages === undefined) c.languages = '';
   if (!c.attacks) c.attacks = [];
+  if (c.spellcastingAbility === undefined) c.spellcastingAbility = '';
+  if (!c.spellSlots) c.spellSlots = {};
+  for (let lvl = 1; lvl <= 9; lvl++) {
+    if (!c.spellSlots[lvl]) c.spellSlots[lvl] = { total: 0, used: 0 };
+  }
   if (c.classFeatures === undefined) c.classFeatures = '';
   if (c.racialTraits === undefined) c.racialTraits = '';
   if (c.feats === undefined) c.feats = '';
@@ -416,7 +426,9 @@ function openCharacter(id) {
   const c = migrateChar(getChar(id));
   if (!c.avatar) c.avatar = '🧙';
   document.getElementById('sheetName').value = c.name;
+  document.getElementById('sheetName').style.color = c.nameColor || '';
   document.getElementById('sheetAvatar').innerHTML = avatarInnerHtml(c, '🧙');
+  renderCharColorSwatches(c);
   populateRaceClassOptions();
   document.getElementById('sheetRace').value = c.race;
   document.getElementById('sheetClass').value = c.class;
@@ -450,6 +462,7 @@ function openCharacter(id) {
   document.getElementById('cEp').value = c.currency.ep;
   document.getElementById('cGp').value = c.currency.gp;
   document.getElementById('cPp').value = c.currency.pp;
+  document.getElementById('sheetSpellAbility').value = c.spellcastingAbility;
 
   renderAbilityGrid(c);
   renderSaves(c);
@@ -459,8 +472,10 @@ function openCharacter(id) {
   renderAttacks(c);
   renderInventory(c);
   renderCharSpells(c);
+  renderSpellSlots(c);
   updateTotalAC(c);
   updateComputedStats(c);
+  updateSpellcastingStats(c);
   switchView('sheet');
   playDoorCreak();
 }
@@ -474,11 +489,88 @@ function updateComputedStats(c) {
   if (passEl) passEl.textContent = passive;
 }
 
+function updateSpellcastingStats(c) {
+  const ability = c.spellcastingAbility;
+  const spellMod = ability ? mod(c.abilities[ability]) : 0;
+  const prof = parseInt(c.prof) || 0;
+  document.getElementById('spellModDisplay').textContent = fmtMod(spellMod);
+  document.getElementById('spellDcDisplay').textContent = ability ? (8 + prof + spellMod) : '—';
+  document.getElementById('spellAtkDisplay').textContent = ability ? fmtMod(prof + spellMod) : '—';
+}
+
+document.getElementById('sheetSpellAbility').addEventListener('change', (e) => {
+  const c = getChar(currentCharId);
+  c.spellcastingAbility = e.target.value;
+  saveState();
+  updateSpellcastingStats(c);
+});
+
+function renderSpellSlots(c) {
+  const wrap = document.getElementById('spellSlotsGrid');
+  wrap.innerHTML = [1, 2, 3, 4, 5, 6, 7, 8, 9].map(lvl => {
+    const slot = c.spellSlots[lvl] || { total: 0, used: 0 };
+    return `
+      <div class="spell-slot-row" data-lvl="${lvl}">
+        <span class="spell-slot-level">Ур. ${lvl}</span>
+        <input type="number" class="spell-slot-total" data-lvl="${lvl}" min="0" value="${slot.total}">
+        <div class="spell-slot-used-controls">
+          <button type="button" data-lvl="${lvl}" data-act="dec">−</button>
+          <span class="spell-slot-used-display" data-lvl="${lvl}">${slot.used}/${slot.total}</span>
+          <button type="button" data-lvl="${lvl}" data-act="inc">+</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+  wrap.querySelectorAll('.spell-slot-total').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const c = getChar(currentCharId);
+      const lvl = inp.dataset.lvl;
+      const total = Math.max(0, parseInt(inp.value) || 0);
+      c.spellSlots[lvl].total = total;
+      if (c.spellSlots[lvl].used > total) c.spellSlots[lvl].used = total;
+      saveState();
+      wrap.querySelector(`.spell-slot-used-display[data-lvl="${lvl}"]`).textContent = `${c.spellSlots[lvl].used}/${total}`;
+    });
+  });
+  wrap.querySelectorAll('button[data-act]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const c = getChar(currentCharId);
+      const lvl = btn.dataset.lvl;
+      const slot = c.spellSlots[lvl];
+      if (btn.dataset.act === 'inc') slot.used = Math.min(slot.total, slot.used + 1);
+      if (btn.dataset.act === 'dec') slot.used = Math.max(0, slot.used - 1);
+      saveState();
+      wrap.querySelector(`.spell-slot-used-display[data-lvl="${lvl}"]`).textContent = `${slot.used}/${slot.total}`;
+    });
+  });
+}
+
 function populateRaceClassOptions() {
   const raceList = document.getElementById('raceOptions');
   const classList = document.getElementById('classOptions');
   raceList.innerHTML = [...DEFAULT_RACES, ...state.customRaces].map(r => `<option value="${escapeAttr(r)}">`).join('');
   classList.innerHTML = [...DEFAULT_CLASSES, ...state.customClasses].map(cl => `<option value="${escapeAttr(cl)}">`).join('');
+}
+
+const CHAR_COLOR_PALETTE = ['', '#d4af6e', '#e07a7a', '#7cb88a', '#6fa9e0', '#a67ce0', '#e0955a'];
+function renderCharColorSwatches(c) {
+  const wrap = document.getElementById('charColorSwatches');
+  wrap.innerHTML = CHAR_COLOR_PALETTE.map(col => {
+    const isDefault = col === '';
+    const style = isDefault ? 'background:var(--bg-elevated);border:1px dashed var(--card-border)' : `background:${col}`;
+    return `<button type="button" class="color-swatch ${c.nameColor === col ? 'is-selected' : ''}" data-color="${col}" style="${style};width:26px;height:26px;border-radius:50%" title="${isDefault ? 'По умолчанию' : ''}"></button>`;
+  }).join('');
+  wrap.querySelectorAll('.color-swatch').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const c = getChar(currentCharId);
+      c.nameColor = btn.dataset.color;
+      saveState();
+      document.getElementById('sheetName').style.color = c.nameColor || '';
+      renderCharColorSwatches(c);
+      renderCharList();
+      playFormatClick();
+    });
+  });
 }
 
 function renderAbilityGrid(c) {
@@ -507,6 +599,7 @@ function renderAbilityGrid(c) {
       renderSkills(c);
       renderSaves(c);
       updateComputedStats(c);
+      updateSpellcastingStats(c);
       updateTotalAC(c);
     });
   });
@@ -741,7 +834,7 @@ document.getElementById('addInvFromCatalog').addEventListener('click', () => {
     saveState();
     if (field === 'name') renderCharList();
     if (field === 'ac') updateTotalAC(c);
-    if (field === 'prof') { renderSaves(c); renderSkills(c); updateComputedStats(c); }
+    if (field === 'prof') { renderSaves(c); renderSkills(c); updateComputedStats(c); updateSpellcastingStats(c); }
   });
 });
 
@@ -761,23 +854,87 @@ document.getElementById('addInvFromCatalog').addEventListener('click', () => {
 
 // Панели форматирования: жирный + цвета для полей выше
 function bindRichToolbars() {
-  const colors = ['#d4af6e', '#e07a7a', '#7cb88a', '#6fa9e0', '#e0bd82'];
+  const colors = ['#d4af6e', '#e07a7a', '#7cb88a', '#6fa9e0', '#a67ce0'];
   document.querySelectorAll('.rich-toolbar').forEach(bar => {
     if (bar.dataset.bound) return;
     bar.dataset.bound = '1';
     const targetId = bar.dataset.target;
-    const swatches = colors.map(c => `<button type="button" class="color-swatch" data-color="${c}" style="background:${c}"></button>`).join('');
-    bar.innerHTML = `<button type="button" class="bold-btn" title="Жирный">Ж</button>${swatches}<button type="button" class="clear-btn" title="Убрать форматирование">Очистить</button>`;
+    const swatches = colors.map(c => `<button type="button" class="color-swatch" data-color="${c}" style="background:${c}" title="Цвет текста"></button>`).join('');
+    bar.innerHTML = `
+      <button type="button" class="fmt-btn bold-btn" data-cmd="bold" title="Жирный">B</button>
+      <button type="button" class="fmt-btn italic-btn" data-cmd="italic" title="Курсив">I</button>
+      <button type="button" class="fmt-btn underline-btn" data-cmd="underline" title="Подчёркнутый">U</button>
+      <select class="fmt-size-select" title="Размер текста">
+        <option value="3">Обычный</option>
+        <option value="4">Уровень 1</option>
+        <option value="5">Уровень 2</option>
+        <option value="6">Уровень 3</option>
+      </select>
+      ${swatches}
+      <button type="button" class="link-btn" title="Ссылка на персонажа">🔗</button>
+      <button type="button" class="clear-btn" title="Убрать форматирование">Очистить</button>
+    `;
     const target = document.getElementById(targetId);
-    bar.querySelectorAll('button').forEach(btn => {
-      btn.addEventListener('mousedown', (e) => e.preventDefault()); // не терять выделение текста
+
+    function updateActiveStates() {
+      try {
+        bar.querySelector('.bold-btn').classList.toggle('is-active', document.queryCommandState('bold'));
+        bar.querySelector('.italic-btn').classList.toggle('is-active', document.queryCommandState('italic'));
+        bar.querySelector('.underline-btn').classList.toggle('is-active', document.queryCommandState('underline'));
+      } catch (e) { /* игнорируем, если команда недоступна вне фокуса */ }
+    }
+    target.addEventListener('keyup', updateActiveStates);
+    target.addEventListener('mouseup', updateActiveStates);
+    target.addEventListener('focus', updateActiveStates);
+    document.addEventListener('selectionchange', () => {
+      if (document.activeElement === target) updateActiveStates();
+    });
+
+    bar.querySelectorAll('button, select').forEach(el => {
+      el.addEventListener('mousedown', (e) => e.preventDefault()); // не терять выделение текста
+    });
+    bar.querySelectorAll('.fmt-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         target.focus();
-        if (btn.classList.contains('bold-btn')) document.execCommand('bold');
-        else if (btn.classList.contains('color-swatch')) document.execCommand('foreColor', false, btn.dataset.color);
-        else if (btn.classList.contains('clear-btn')) document.execCommand('removeFormat');
+        document.execCommand(btn.dataset.cmd);
         target.dispatchEvent(new Event('input'));
+        updateActiveStates();
+        playFormatClick();
       });
+    });
+    bar.querySelectorAll('.color-swatch').forEach(btn => {
+      btn.addEventListener('click', () => {
+        target.focus();
+        document.execCommand('foreColor', false, btn.dataset.color);
+        target.dispatchEvent(new Event('input'));
+        playFormatClick();
+      });
+    });
+    bar.querySelector('.fmt-size-select').addEventListener('change', (e) => {
+      target.focus();
+      document.execCommand('fontSize', false, e.target.value);
+      target.dispatchEvent(new Event('input'));
+      playFormatClick();
+    });
+    bar.querySelector('.clear-btn').addEventListener('click', () => {
+      target.focus();
+      document.execCommand('removeFormat');
+      target.dispatchEvent(new Event('input'));
+      updateActiveStates();
+      playFormatClick();
+    });
+    bar.querySelector('.link-btn').addEventListener('click', () => {
+      const savedTarget = target;
+      if (!state.characters.length) { showToast('Пока нет других персонажей для ссылки'); return; }
+      openListPicker(false, 'Ссылка на персонажа', state.characters,
+        (ch) => `<div class="avatar-circle small">${avatarInnerHtml(ch, '🧙')}</div><div style="flex:1"><div>${escapeHtml(ch.name)}</div><div class="meta">${escapeHtml(ch.race)} · ${escapeHtml(ch.class)}</div></div>`,
+        (ch) => {
+          savedTarget.focus();
+          document.execCommand('insertHTML', false, `<span class="char-link" contenteditable="false" data-char-id="${ch.id}">🔗 ${escapeHtml(ch.name)}</span>&nbsp;`);
+          savedTarget.dispatchEvent(new Event('input'));
+          playFormatClick();
+        }
+      );
     });
   });
 }
@@ -1669,6 +1826,7 @@ document.querySelectorAll('.expand-btn').forEach(btn => {
       openModal(label, `
         <div class="rich-toolbar" id="expandedToolbar" data-target="expandedRich"></div>
         <div id="expandedRich" class="rich-editable expanded-editor-rich" contenteditable="true">${source.innerHTML}</div>
+        <button class="primary block" id="expandedDoneBtn" style="margin-top:10px">✓ Готово</button>
       `);
       bindRichToolbars();
       const expanded = document.getElementById('expandedRich');
@@ -1677,6 +1835,7 @@ document.querySelectorAll('.expand-btn').forEach(btn => {
         source.innerHTML = expanded.innerHTML;
         source.dispatchEvent(new Event('input'));
       });
+      document.getElementById('expandedDoneBtn').addEventListener('click', closeModal);
     } else {
       openModal(label, `<textarea id="expandedTextarea" class="expanded-editor-textarea">${escapeHtml(source.value)}</textarea>`);
       const expanded = document.getElementById('expandedTextarea');
@@ -1718,6 +1877,23 @@ function escapeAttr(str) { return escapeHtml(str); }
     document.removeEventListener('pointerdown', unlockAudioOnce);
   }, { once: true });
 })();
+
+// Клик по ссылке-персонажу внутри форматируемого текста — открывает его лист
+document.addEventListener('click', (e) => {
+  const link = e.target.closest('.char-link');
+  if (link && state.characters.find(x => x.id === link.dataset.charId)) {
+    closeModal();
+    openCharacter(link.dataset.charId);
+  }
+});
+
+// Числовые поля: выделяем текущее значение целиком при фокусе,
+// чтобы ввод новой цифры не превращался в "03" или "103"
+document.addEventListener('focus', (e) => {
+  if (e.target && e.target.tagName === 'INPUT' && e.target.type === 'number') {
+    e.target.select();
+  }
+}, true);
 
 // ==================== INIT ====================
 renderCharList();
