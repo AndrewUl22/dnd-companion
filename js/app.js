@@ -1007,10 +1007,12 @@ function bindRichToolbars() {
       openListPicker(false, 'Перейти к метке', items,
         (item) => `<div style="flex:1">${escapeHtml(item.text)}</div>`,
         (item) => {
-          target.focus();
-          target.scrollTop = Math.max(0, item.el.offsetTop - target.offsetTop - 10);
+          // scrollIntoView сам прокрутит и поле, и страницу вокруг него — надёжнее,
+          // чем вручную считать offsetTop (тот часто мерился не от нужного контейнера)
+          item.el.scrollIntoView({ block: 'center', behavior: 'smooth' });
           item.el.classList.add('anchor-flash');
           setTimeout(() => item.el.classList.remove('anchor-flash'), 1400);
+          setTimeout(() => target.focus(), 400);
         }
       );
     });
@@ -1164,8 +1166,8 @@ function openBestiaryDetail(id) {
     ${b.habitat && b.habitat.length ? `<div class="meta" style="margin-bottom:8px;text-align:center">Обитание: ${escapeHtml(b.habitat.join(', '))}</div>` : ''}
     <div style="margin-bottom:8px">КД ${b.ac} · ХП ${escapeHtml(String(b.hp))} · Скорость ${escapeHtml(b.speed)}</div>
     <div style="margin-bottom:8px;font-size:13px;color:var(--text-dim)">${abRow}</div>
-    <div style="white-space:pre-wrap;margin-bottom:10px">${escapeHtml(b.description || '')}</div>
-    <div style="white-space:pre-wrap;font-size:13px;background:var(--bg-elevated);padding:10px;border-radius:10px">${escapeHtml(b.actions || '')}</div>
+    <div style="white-space:pre-wrap;margin-bottom:10px">${b.description || ''}</div>
+    <div style="white-space:pre-wrap;font-size:13px;background:var(--bg-elevated);padding:10px;border-radius:10px">${b.actions || ''}</div>
     ${spellsHtml}
     ${editBtn}
   `);
@@ -1209,13 +1211,18 @@ function openBestiaryForm(existing) {
     <div class="chip-row" id="bHabitatChips" style="flex-wrap:wrap">${habitatChips}</div>
     <label>Характеристики (СИЛ ЛОВ ТЕЛ ИНТ МДР ХАР через пробел)</label>
     <input id="bAbilities" value="${['str','dex','con','int','wis','cha'].map(k => b.abilities[k]).join(' ')}">
-    <label>Описание</label><textarea id="bDesc">${escapeHtml(b.description)}</textarea>
-    <label>Действия</label><textarea id="bActions">${escapeHtml(b.actions)}</textarea>
+    <label>Описание</label>
+    <div class="rich-toolbar" data-target="bDesc"></div>
+    <div class="rich-editable" id="bDesc" contenteditable="true" data-placeholder="Описание существа">${b.description}</div>
+    <label>Действия</label>
+    <div class="rich-toolbar" data-target="bActions"></div>
+    <div class="rich-editable" id="bActions" contenteditable="true" data-placeholder="Действия, атаки, особенности">${b.actions}</div>
     <label style="margin-top:6px">Заклинания (если существо владеет магией)</label>
     <div id="bKnownSpellsList"></div>
     <button type="button" class="secondary block" id="bAddSpellBtn">+ Добавить заклинание из каталога</button>
     <button class="primary block" id="saveBeast">Сохранить</button>
   `);
+  bindRichToolbars();
   bindAvatarPicker('bAvatar', b, defaultBeastEmoji(b.type), () => {});
   const selectedHabitats = new Set(b.habitat);
   document.getElementById('bHabitatChips').querySelectorAll('.chip').forEach(chip => {
@@ -1274,8 +1281,8 @@ function openBestiaryForm(existing) {
     const nums = document.getElementById('bAbilities').value.trim().split(/\s+/).map(n => parseInt(n) || 10);
     const keys = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
     keys.forEach((k, i) => { b.abilities[k] = nums[i] !== undefined ? nums[i] : 10; });
-    b.description = document.getElementById('bDesc').value;
-    b.actions = document.getElementById('bActions').value;
+    b.description = document.getElementById('bDesc').innerHTML;
+    b.actions = document.getElementById('bActions').innerHTML;
     b.custom = true;
     if (!state.bestiary.find(x => x.id === b.id)) state.bestiary.push(b);
     saveState();
