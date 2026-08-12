@@ -1008,11 +1008,12 @@ function bindRichToolbars() {
         (item) => `<div style="flex:1">${escapeHtml(item.text)}</div>`,
         (item) => {
           // scrollIntoView сам прокрутит и поле, и страницу вокруг него — надёжнее,
-          // чем вручную считать offsetTop (тот часто мерился не от нужного контейнера)
+          // чем вручную считать offsetTop (тот часто мерился не от нужного контейнера).
+          // ВАЖНО: не вызываем focus() после — это сбрасывает прокрутку обратно к
+          // позиции курсора, из-за чего экран "прыгал" к метке и тут же откатывался назад.
           item.el.scrollIntoView({ block: 'center', behavior: 'smooth' });
           item.el.classList.add('anchor-flash');
           setTimeout(() => item.el.classList.remove('anchor-flash'), 1400);
-          setTimeout(() => target.focus(), 400);
         }
       );
     });
