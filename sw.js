@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dnd-companion-v22';
+const CACHE_NAME = 'dnd-companion-v24';
 const ASSETS = [
   './',
   './index.html',
@@ -9,7 +9,9 @@ const ASSETS = [
   './js/sounds.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './icons/icon-splash.png'
+  './icons/icon-splash.png',
+  './icons/bg-die.png',
+  './icons/bg-quill.png'
 ];
 
 self.addEventListener('install', (event) => {

@@ -948,10 +948,8 @@ function bindRichToolbars() {
     bar.querySelectorAll('.fmt-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         target.focus();
-        restoreSelection();
         document.execCommand(btn.dataset.cmd);
         target.dispatchEvent(new Event('input'));
-        saveSelection();
         updateActiveStates();
         playFormatClick();
       });
@@ -959,10 +957,8 @@ function bindRichToolbars() {
     bar.querySelectorAll('.color-swatch').forEach(btn => {
       btn.addEventListener('click', () => {
         target.focus();
-        restoreSelection();
         document.execCommand('foreColor', false, btn.dataset.color);
         target.dispatchEvent(new Event('input'));
-        saveSelection();
         updateActiveStates();
         playFormatClick();
       });
@@ -978,25 +974,24 @@ function bindRichToolbars() {
     });
     bar.querySelector('.clear-btn').addEventListener('click', () => {
       target.focus();
-      restoreSelection();
       document.execCommand('removeFormat');
       target.dispatchEvent(new Event('input'));
-      saveSelection();
       updateActiveStates();
       playFormatClick();
     });
     bar.querySelector('.anchor-btn').addEventListener('click', () => {
-      if (!savedRange || savedRange.collapsed) {
+      const sel = window.getSelection();
+      if (sel.isCollapsed) {
         showToast('Сначала выделите текст — например, название умения');
         return;
       }
       target.focus();
-      restoreSelection();
-      const text = window.getSelection().toString();
+      const text = sel.toString();
       if (!text.trim()) { showToast('Сначала выделите текст — например, название умения'); return; }
-      document.execCommand('insertHTML', false, `<span class="text-anchor">${escapeHtml(text)}</span>`);
+      // добавляем невидимый пробел после метки, иначе курсор "застревает" внутри
+      // подсвеченного span и весь следующий набранный текст тоже выглядит как метка
+      document.execCommand('insertHTML', false, `<span class="text-anchor">${escapeHtml(text)}</span>&nbsp;`);
       target.dispatchEvent(new Event('input'));
-      saveSelection();
       playFormatClick();
       showToast('Метка добавлена — теперь можно быстро перейти к ней через 🔍');
     });

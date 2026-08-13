@@ -100,15 +100,48 @@ body {
 body::before {
   content: '';
   position: fixed;
-  inset: 0;
-  background-image: url('../icons/icon-splash.png');
+  top: 30vh;
+  left: 50%;
+  width: 190px;
+  height: 184px;
+  margin-left: -125px;
+  background-image: url('../icons/bg-die.png');
   background-repeat: no-repeat;
-  background-position: center 38vh;
-  background-size: 300px 300px;
-  opacity: 0.06;
-  filter: grayscale(0.3);
+  background-size: contain;
+  opacity: 0.07;
+  filter: grayscale(0.25);
   pointer-events: none;
   z-index: 0;
+  animation: bgDieSpin 16s linear infinite;
+  transform-origin: center;
+}
+body::after {
+  content: '';
+  position: fixed;
+  top: 22vh;
+  left: 50%;
+  width: 150px;
+  height: 181px;
+  margin-left: 40px;
+  background-image: url('../icons/bg-quill.png');
+  background-repeat: no-repeat;
+  background-size: contain;
+  opacity: 0.07;
+  filter: grayscale(0.25);
+  pointer-events: none;
+  z-index: 0;
+  animation: bgQuillWrite 2.2s ease-in-out infinite;
+  transform-origin: 25% 85%;
+}
+@keyframes bgDieSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes bgQuillWrite {
+  0%, 100% { transform: rotate(-6deg) translateX(0); }
+  25% { transform: rotate(2deg) translateX(3px); }
+  50% { transform: rotate(-4deg) translateX(-2px); }
+  75% { transform: rotate(3deg) translateX(2px); }
 }
 header.topbar, main, nav.tabbar, .splash, .modal-backdrop, .toast, .fab {
   position: relative;
