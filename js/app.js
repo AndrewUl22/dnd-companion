@@ -78,17 +78,18 @@ function switchView(view) {
   });
   const titles = {
     characters: 'Персонажи', bestiary: 'Бестиарий', items: 'Предметы', spells: 'Заклинания',
-    settings: 'Настройки', battle: 'Бой', sheet: currentCharId ? getChar(currentCharId).name || 'Персонаж' : 'Персонаж'
+    settings: 'Настройки', battle: 'Бой', books: 'Книги', sheet: currentCharId ? getChar(currentCharId).name || 'Персонаж' : 'Персонаж'
   };
   document.getElementById('headerTitle').textContent = titles[view] || 'DnD Companion';
   document.getElementById('headerTitle').style.color = (view === 'sheet' && currentCharId && getChar(currentCharId).nameColor) ? getChar(currentCharId).nameColor : '';
-  document.getElementById('fabAdd').style.display = (view === 'sheet' || view === 'settings') ? 'none' : 'flex';
+  document.getElementById('fabAdd').style.display = (view === 'sheet' || view === 'settings' || view === 'books') ? 'none' : 'flex';
 
   if (view === 'characters') renderCharList();
   if (view === 'bestiary') renderBestiary();
   if (view === 'items') renderItems();
   if (view === 'spells') renderSpells();
   if (view === 'battle') renderBattle();
+  if (view === 'books') renderBooks();
 }
 
 document.querySelectorAll('nav.tabbar button').forEach(btn => {
@@ -97,6 +98,7 @@ document.querySelectorAll('nav.tabbar button').forEach(btn => {
 
 document.getElementById('settingsBtn').addEventListener('click', () => switchView('settings'));
 document.getElementById('battleBtn').addEventListener('click', () => switchView('battle'));
+document.getElementById('booksBtn').addEventListener('click', () => switchView('books'));
 document.getElementById('rulesBtn').addEventListener('click', () => window.open('https://next.dnd.su/', '_blank', 'noopener'));
 
 document.getElementById('fabAdd').addEventListener('click', () => {
@@ -1135,7 +1137,7 @@ function renderBestiary() {
         <div>${escapeHtml(b.name)} ${b.custom ? '★' : ''}</div>
         <div class="meta">${escapeHtml(b.type)}${b.size ? ' · ' + escapeHtml(b.size) : ''} · КО ${escapeHtml(b.cr)} · КД ${b.ac} · ХП ${escapeHtml(String(b.hp))}</div>
       </div>
-      <span class="badge">${escapeHtml(b.speed)}</span>
+      <span class="badge">${b.flySpeed ? '🪽 ' : ''}${escapeHtml(b.speed)}</span>
     </div>
   `).join('');
   list.querySelectorAll('.list-item').forEach(el => {
@@ -1156,12 +1158,20 @@ function openBestiaryDetail(id) {
         return `<div class="skill-row" data-open-spell="${sp.id}" style="cursor:pointer"><span>${escapeHtml(sp.name)}</span><span class="mod">${sp.level === 0 ? 'Загов.' : 'Ур.' + sp.level} ▸</span></div>`;
       }).join('')
     : '';
+  const speedParts = [`${escapeHtml(b.speed)} (по земле)`];
+  if (b.flySpeed) speedParts.push(`полёт ${escapeHtml(b.flySpeed)}`);
+  if (b.swimSpeed) speedParts.push(`плавание ${escapeHtml(b.swimSpeed)}`);
+  if (b.climbSpeed) speedParts.push(`лазанье ${escapeHtml(b.climbSpeed)}`);
   openModal(b.name, `
     <div class="avatar-circle large" style="margin:0 auto 12px">${avatarInnerHtml(b, defaultBeastEmoji(b.type))}</div>
     <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(b.type)}${b.size ? ' · ' + escapeHtml(b.size) : ''} · КО ${escapeHtml(b.cr)}</div>
     ${b.habitat && b.habitat.length ? `<div class="meta" style="margin-bottom:8px;text-align:center">Обитание: ${escapeHtml(b.habitat.join(', '))}</div>` : ''}
-    <div style="margin-bottom:8px">КД ${b.ac} · ХП ${escapeHtml(String(b.hp))} · Скорость ${escapeHtml(b.speed)}</div>
+    <div style="margin-bottom:8px">КД ${b.ac} · ХП ${escapeHtml(String(b.hp))}</div>
+    <div style="margin-bottom:8px">Скорость: ${speedParts.join(', ')}</div>
     <div style="margin-bottom:8px;font-size:13px;color:var(--text-dim)">${abRow}</div>
+    ${b.skills ? `<div style="margin-bottom:4px"><b>Навыки</b> ${escapeHtml(b.skills)}</div>` : ''}
+    ${b.perception ? `<div style="margin-bottom:4px"><b>Восприятие (пассивное)</b> ${escapeHtml(b.perception)}</div>` : ''}
+    ${b.languages ? `<div style="margin-bottom:8px"><b>Языки</b> ${escapeHtml(b.languages)}</div>` : ''}
     <div style="white-space:pre-wrap;margin-bottom:10px">${b.description || ''}</div>
     <div style="white-space:pre-wrap;font-size:13px;background:var(--bg-elevated);padding:10px;border-radius:10px">${b.actions || ''}</div>
     ${spellsHtml}
@@ -1184,9 +1194,15 @@ function openBestiaryDetail(id) {
 }
 
 function openBestiaryForm(existing) {
-  const b = existing || { id: uid('b'), name: '', type: '', cr: '', size: 'Средний', habitat: [], ac: 10, hp: '', speed: '30 фт', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, actions: '', description: '', avatar: '', knownSpells: [], custom: true };
+  const b = existing || { id: uid('b'), name: '', type: '', cr: '', size: 'Средний', habitat: [], ac: 10, hp: '', speed: '30 фт', flySpeed: '', swimSpeed: '', climbSpeed: '', skills: '', perception: '', languages: '', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, actions: '', description: '', avatar: '', knownSpells: [], custom: true };
   if (!b.habitat) b.habitat = [];
   if (!b.knownSpells) b.knownSpells = [];
+  if (b.flySpeed === undefined) b.flySpeed = '';
+  if (b.swimSpeed === undefined) b.swimSpeed = '';
+  if (b.climbSpeed === undefined) b.climbSpeed = '';
+  if (b.skills === undefined) b.skills = '';
+  if (b.perception === undefined) b.perception = '';
+  if (b.languages === undefined) b.languages = '';
   const sizeOptions = CREATURE_SIZES.map(s => `<option ${s === b.size ? 'selected' : ''}>${s}</option>`).join('');
   const habitatChips = HABITATS.map(h => `<button type="button" class="chip ${b.habitat.includes(h) ? 'active' : ''}" data-h="${escapeHtml(h)}">${escapeHtml(h)}</button>`).join('');
   openModal(existing ? 'Редактировать существо' : 'Новое существо', `
@@ -1199,14 +1215,26 @@ function openBestiaryForm(existing) {
     </div>
     <div class="row">
       <div><label>ХП</label><input id="bHp" value="${escapeAttr(String(b.hp))}" placeholder="2к6"></div>
-      <div><label>Скорость</label><input id="bSpeed" value="${escapeAttr(b.speed)}"></div>
+      <div><label>Скорость (по земле)</label><input id="bSpeed" value="${escapeAttr(b.speed)}"></div>
     </div>
+    <div class="row">
+      <div><label>Полёт</label><input id="bFlySpeed" value="${escapeAttr(b.flySpeed)}" placeholder="Например, 50 фт"></div>
+      <div><label>Плавание</label><input id="bSwimSpeed" value="${escapeAttr(b.swimSpeed)}" placeholder="Например, 40 фт"></div>
+    </div>
+    <label>Лазанье (по стенам и т.п.)</label>
+    <input id="bClimbSpeed" value="${escapeAttr(b.climbSpeed)}" placeholder="Например, 30 фт">
     <label>Размер</label>
     <select id="bSize">${sizeOptions}</select>
     <label>Обитание (можно выбрать несколько)</label>
     <div class="chip-row" id="bHabitatChips" style="flex-wrap:wrap">${habitatChips}</div>
     <label>Характеристики (СИЛ ЛОВ ТЕЛ ИНТ МДР ХАР через пробел)</label>
     <input id="bAbilities" value="${['str','dex','con','int','wis','cha'].map(k => b.abilities[k]).join(' ')}">
+    <label>Навыки</label>
+    <input id="bSkills" value="${escapeAttr(b.skills)}" placeholder="Например, Внимание +7, Магия +3">
+    <label>Восприятие (пассивное)</label>
+    <input id="bPerception" value="${escapeAttr(b.perception)}" placeholder="Например, 17">
+    <label>Языки</label>
+    <input id="bLanguages" value="${escapeAttr(b.languages)}" placeholder="Например, Общий, Ауран">
     <label>Описание</label>
     <div class="rich-toolbar" data-target="bDesc"></div>
     <div class="rich-editable" id="bDesc" contenteditable="true" data-placeholder="Описание существа">${b.description}</div>
@@ -1271,6 +1299,12 @@ function openBestiaryForm(existing) {
     b.ac = parseInt(document.getElementById('bAc').value) || 10;
     b.hp = document.getElementById('bHp').value.trim();
     b.speed = document.getElementById('bSpeed').value.trim();
+    b.flySpeed = document.getElementById('bFlySpeed').value.trim();
+    b.swimSpeed = document.getElementById('bSwimSpeed').value.trim();
+    b.climbSpeed = document.getElementById('bClimbSpeed').value.trim();
+    b.skills = document.getElementById('bSkills').value.trim();
+    b.perception = document.getElementById('bPerception').value.trim();
+    b.languages = document.getElementById('bLanguages').value.trim();
     b.size = document.getElementById('bSize').value;
     b.habitat = Array.from(selectedHabitats);
     b.avatar = b.avatar || defaultBeastEmoji(document.getElementById('bType').value.trim());
@@ -1748,6 +1782,69 @@ function openCombatantForm() {
     showToast('Добавлено в бой');
   });
 }
+
+// ==================== BOOKS (PDF) ====================
+function renderBooks() {
+  const list = document.getElementById('booksList');
+  const empty = document.getElementById('booksEmpty');
+  getAllBooks().then((books) => {
+    if (!books.length) {
+      list.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+    list.innerHTML = books.map(b => `
+      <div class="list-item" data-id="${b.id}">
+        <div class="avatar-circle small">📕</div>
+        <div style="flex:1">
+          <div>${escapeHtml(b.name)}</div>
+          <div class="meta">${formatFileSize(b.size)}</div>
+        </div>
+        <button type="button" data-id="${b.id}" data-act="delbook" class="secondary" style="padding:6px 10px;font-size:11px">✕</button>
+      </div>
+    `).join('');
+    list.querySelectorAll('.list-item').forEach(el => {
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('[data-act="delbook"]')) return;
+        openBookViewer(el.dataset.id, books);
+      });
+    });
+    list.querySelectorAll('[data-act="delbook"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (!confirm('Удалить эту книгу?')) return;
+        deleteBookById(btn.dataset.id).then(() => { playChainClink(); renderBooks(); });
+      });
+    });
+  }).catch(() => {
+    list.innerHTML = '<div class="empty-state">Не удалось загрузить список книг</div>';
+  });
+}
+
+function openBookViewer(id, books) {
+  const book = books.find(b => b.id === id);
+  if (!book) return;
+  const url = URL.createObjectURL(book.blob);
+  window.open(url, '_blank');
+}
+
+document.getElementById('addBookBtn').addEventListener('click', () => {
+  document.getElementById('bookFileInput').click();
+});
+document.getElementById('bookFileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.type !== 'application/pdf') { showToast('Нужен файл в формате PDF'); return; }
+  showToast('Загружаем книгу…');
+  addBookFile(file).then(() => {
+    playPageTurn();
+    showToast('Книга добавлена');
+    renderBooks();
+  }).catch(() => {
+    showToast('Не удалось сохранить файл — возможно, не хватает места');
+  });
+  e.target.value = '';
+});
 
 // ==================== IMPORT / EXPORT ====================
 document.getElementById('exportBtn').addEventListener('click', () => {

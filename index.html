@@ -27,6 +27,7 @@
   <h1 id="headerTitle">Персонажи</h1>
   <div class="row" style="flex:none;gap:2px">
     <button class="icon-btn" id="rulesBtn" title="Правила онлайн">📖</button>
+    <button class="icon-btn" id="booksBtn" title="Книги">📚</button>
     <button class="icon-btn" id="battleBtn" title="Бой">⚔️</button>
     <button class="icon-btn" id="diceBtn" title="Кубики">🎲</button>
     <button class="icon-btn" id="settingsBtn" title="Настройки">⚙️</button>
@@ -338,6 +339,20 @@
     <div class="empty-state" id="battleEmpty" style="display:none">Участников пока нет.<br>Нажмите «+», чтобы добавить.</div>
   </section>
 
+  <!-- ===== BOOKS VIEW ===== -->
+  <section class="view" id="view-books">
+    <div class="card">
+      <p style="color:var(--text-dim);font-size:13px;margin-top:0">
+        Загружайте PDF с книгами правил, чтобы держать их под рукой прямо
+        в приложении — файлы хранятся на устройстве и открываются офлайн.
+      </p>
+      <input type="file" id="bookFileInput" accept="application/pdf" style="display:none">
+      <button class="primary block" id="addBookBtn">📚 Загрузить PDF</button>
+    </div>
+    <div id="booksList"></div>
+    <div class="empty-state" id="booksEmpty" style="display:none">Пока нет ни одной книги.</div>
+  </section>
+
   <!-- ===== SETTINGS VIEW ===== -->
   <section class="view" id="view-settings">
     <div class="card">
@@ -420,6 +435,7 @@
 
 <script src="js/data.js"></script>
 <script src="js/sounds.js"></script>
+<script src="js/books.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
