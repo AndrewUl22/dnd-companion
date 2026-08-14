@@ -151,37 +151,6 @@ main {
 
 .view { display: none; }
 .view.active { display: block; animation: fadein .18s ease; }
-
-/* Просмотрщик PDF — занимает весь доступный экран, без обычных полей страницы */
-#view-pdf-viewer.active {
-  display: flex;
-  flex-direction: column;
-  margin: -14px -14px -20px;
-  height: calc(100vh - 118px);
-}
-.pdf-viewer-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
-  background: var(--card);
-  border-bottom: 1px solid var(--card-border);
-  flex: none;
-}
-.pdf-viewer-title {
-  font-size: 12px;
-  color: var(--text-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-.pdf-frame {
-  flex: 1;
-  width: 100%;
-  border: none;
-  background: #fff;
-}
 @keyframes fadein { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: none;} }
 
 nav.tabbar {
