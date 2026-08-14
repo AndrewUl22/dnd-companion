@@ -78,11 +78,11 @@ function switchView(view) {
   });
   const titles = {
     characters: 'Персонажи', bestiary: 'Бестиарий', items: 'Предметы', spells: 'Заклинания',
-    settings: 'Настройки', battle: 'Бой', books: 'Книги', sheet: currentCharId ? getChar(currentCharId).name || 'Персонаж' : 'Персонаж'
+    settings: 'Настройки', battle: 'Бой', books: 'Книги', 'pdf-viewer': 'Книга', sheet: currentCharId ? getChar(currentCharId).name || 'Персонаж' : 'Персонаж'
   };
   document.getElementById('headerTitle').textContent = titles[view] || 'DnD Companion';
   document.getElementById('headerTitle').style.color = (view === 'sheet' && currentCharId && getChar(currentCharId).nameColor) ? getChar(currentCharId).nameColor : '';
-  document.getElementById('fabAdd').style.display = (view === 'sheet' || view === 'settings' || view === 'books') ? 'none' : 'flex';
+  document.getElementById('fabAdd').style.display = (view === 'sheet' || view === 'settings' || view === 'books' || view === 'pdf-viewer') ? 'none' : 'flex';
 
   if (view === 'characters') renderCharList();
   if (view === 'bestiary') renderBestiary();
@@ -1172,8 +1172,8 @@ function openBestiaryDetail(id) {
     ${b.skills ? `<div style="margin-bottom:4px"><b>Навыки</b> ${escapeHtml(b.skills)}</div>` : ''}
     ${b.perception ? `<div style="margin-bottom:4px"><b>Восприятие (пассивное)</b> ${escapeHtml(b.perception)}</div>` : ''}
     ${b.languages ? `<div style="margin-bottom:8px"><b>Языки</b> ${escapeHtml(b.languages)}</div>` : ''}
-    <div style="white-space:pre-wrap;margin-bottom:10px">${b.description || ''}</div>
-    <div style="white-space:pre-wrap;font-size:13px;background:var(--bg-elevated);padding:10px;border-radius:10px">${b.actions || ''}</div>
+    <div style="white-space:pre-wrap;margin-bottom:10px;font-size:15px;font-weight:500">${b.description || ''}</div>
+    <div style="white-space:pre-wrap;font-size:15px;font-weight:500;background:var(--bg-elevated);padding:10px;border-radius:10px">${b.actions || ''}</div>
     ${spellsHtml}
     ${editBtn}
   `);
@@ -1821,12 +1821,25 @@ function renderBooks() {
   });
 }
 
+let currentPdfObjectUrl = null;
+
 function openBookViewer(id, books) {
   const book = books.find(b => b.id === id);
   if (!book) return;
-  const url = URL.createObjectURL(book.blob);
-  window.open(url, '_blank');
+  // Показываем PDF прямо во встроенном iframe на своей же странице — так файл
+  // никогда не уходит во внешнее системное приложение и не создаёт копий на диске
+  if (currentPdfObjectUrl) URL.revokeObjectURL(currentPdfObjectUrl);
+  currentPdfObjectUrl = URL.createObjectURL(book.blob);
+  document.getElementById('pdfFrame').src = currentPdfObjectUrl;
+  document.getElementById('pdfViewerTitle').textContent = book.name;
+  switchView('pdf-viewer');
 }
+
+document.getElementById('pdfBackBtn').addEventListener('click', () => {
+  document.getElementById('pdfFrame').src = 'about:blank';
+  if (currentPdfObjectUrl) { URL.revokeObjectURL(currentPdfObjectUrl); currentPdfObjectUrl = null; }
+  switchView('books');
+});
 
 document.getElementById('addBookBtn').addEventListener('click', () => {
   document.getElementById('bookFileInput').click();
