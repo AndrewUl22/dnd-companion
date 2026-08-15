@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dnd-companion-v29';
+const CACHE_NAME = 'dnd-companion-v30';
 const ASSETS = [
   './',
   './index.html',
@@ -14,10 +14,21 @@ const ASSETS = [
   './icons/bg-die.png',
   './icons/bg-quill.png'
 ];
+// CDN-библиотека для чтения PDF — кэшируем отдельно и без риска для остального:
+// если в момент установки нет сети или CDN недоступен, всё остальное приложение
+// всё равно должно нормально закэшироваться и работать офлайн
+const CDN_ASSETS = [
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.addAll(ASSETS).then(() =>
+        Promise.allSettled(CDN_ASSETS.map((url) => cache.add(url)))
+      )
+    )
   );
   self.skipWaiting();
 });

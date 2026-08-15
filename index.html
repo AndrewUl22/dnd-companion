@@ -353,6 +353,27 @@
     <div class="empty-state" id="booksEmpty" style="display:none">Пока нет ни одной книги.</div>
   </section>
 
+  <!-- ===== PDF VIEWER VIEW (рендер через pdf.js на canvas — не зависит от
+       системного PDF-плагина и не уходит во внешние приложения) ===== -->
+  <section class="view" id="view-pdf-viewer">
+    <div class="pdf-viewer-bar">
+      <button class="secondary" id="pdfBackBtn">← Назад</button>
+      <span class="pdf-viewer-title" id="pdfViewerTitle"></span>
+    </div>
+    <div class="pdf-viewer-toolbar">
+      <button class="secondary" id="pdfPrevBtn">‹</button>
+      <span class="pdf-page-indicator" id="pdfPageIndicator">— / —</span>
+      <button class="secondary" id="pdfNextBtn">›</button>
+      <span style="flex:1"></span>
+      <button class="secondary" id="pdfZoomOutBtn">−</button>
+      <button class="secondary" id="pdfZoomInBtn">+</button>
+    </div>
+    <div class="pdf-canvas-wrap" id="pdfCanvasWrap">
+      <canvas id="pdfCanvas"></canvas>
+      <div class="empty-state" id="pdfLoading">Открываем книгу…</div>
+    </div>
+  </section>
+
   <!-- ===== SETTINGS VIEW ===== -->
   <section class="view" id="view-settings">
     <div class="card">
@@ -436,6 +457,7 @@
 <script src="js/data.js"></script>
 <script src="js/sounds.js"></script>
 <script src="js/books.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

@@ -78,11 +78,11 @@ function switchView(view) {
   });
   const titles = {
     characters: 'Персонажи', bestiary: 'Бестиарий', items: 'Предметы', spells: 'Заклинания',
-    settings: 'Настройки', battle: 'Бой', books: 'Книги', sheet: currentCharId ? getChar(currentCharId).name || 'Персонаж' : 'Персонаж'
+    settings: 'Настройки', battle: 'Бой', books: 'Книги', 'pdf-viewer': 'Книга', sheet: currentCharId ? getChar(currentCharId).name || 'Персонаж' : 'Персонаж'
   };
   document.getElementById('headerTitle').textContent = titles[view] || 'DnD Companion';
   document.getElementById('headerTitle').style.color = (view === 'sheet' && currentCharId && getChar(currentCharId).nameColor) ? getChar(currentCharId).nameColor : '';
-  document.getElementById('fabAdd').style.display = (view === 'sheet' || view === 'settings' || view === 'books') ? 'none' : 'flex';
+  document.getElementById('fabAdd').style.display = (view === 'sheet' || view === 'settings' || view === 'books' || view === 'pdf-viewer') ? 'none' : 'flex';
 
   if (view === 'characters') renderCharList();
   if (view === 'bestiary') renderBestiary();
@@ -1821,16 +1821,84 @@ function renderBooks() {
   });
 }
 
-let currentPdfObjectUrl = null;
+// ==================== PDF VIEWER (pdf.js, рендер на canvas) ====================
+// pdf.js подключён через <script> с CDN в index.html — грузится браузером
+// пользователя при открытии сайта, а не требует ничего от нас на этапе сборки.
+if (typeof pdfjsLib !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+let pdfCurrentDoc = null;
+let pdfCurrentPageNum = 1;
+let pdfCurrentScale = 1.2;
 
 function openBookViewer(id, books) {
   const book = books.find(b => b.id === id);
   if (!book) return;
-  if (currentPdfObjectUrl) URL.revokeObjectURL(currentPdfObjectUrl);
-  currentPdfObjectUrl = URL.createObjectURL(book.blob);
-  const opened = window.open(currentPdfObjectUrl, '_blank');
-  if (!opened) showToast('Браузер заблокировал открытие — разрешите всплывающие окна для этого сайта');
+  if (typeof pdfjsLib === 'undefined') {
+    showToast('Не удалось загрузить модуль чтения PDF — проверьте подключение к интернету при первом открытии книги');
+    return;
+  }
+  document.getElementById('pdfViewerTitle').textContent = book.name;
+  document.getElementById('pdfCanvas').style.display = 'none';
+  document.getElementById('pdfLoading').style.display = 'block';
+  document.getElementById('pdfLoading').textContent = 'Открываем книгу…';
+  document.getElementById('pdfPageIndicator').textContent = '— / —';
+  switchView('pdf-viewer');
+
+  book.blob.arrayBuffer().then((buf) => {
+    return pdfjsLib.getDocument({ data: buf }).promise;
+  }).then((pdf) => {
+    pdfCurrentDoc = pdf;
+    pdfCurrentPageNum = 1;
+    pdfCurrentScale = 1.2;
+    renderPdfPage(pdfCurrentPageNum);
+  }).catch((err) => {
+    console.error(err);
+    document.getElementById('pdfLoading').textContent = 'Не удалось открыть файл — возможно, он повреждён';
+  });
 }
+
+function renderPdfPage(num) {
+  if (!pdfCurrentDoc) return;
+  pdfCurrentDoc.getPage(num).then((page) => {
+    const viewport = page.getViewport({ scale: pdfCurrentScale });
+    const canvas = document.getElementById('pdfCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    page.render({ canvasContext: ctx, viewport }).promise.then(() => {
+      document.getElementById('pdfLoading').style.display = 'none';
+      canvas.style.display = 'block';
+      document.getElementById('pdfPageIndicator').textContent = `${num} / ${pdfCurrentDoc.numPages}`;
+    });
+  });
+}
+
+document.getElementById('pdfPrevBtn').addEventListener('click', () => {
+  if (!pdfCurrentDoc || pdfCurrentPageNum <= 1) return;
+  pdfCurrentPageNum--;
+  renderPdfPage(pdfCurrentPageNum);
+});
+document.getElementById('pdfNextBtn').addEventListener('click', () => {
+  if (!pdfCurrentDoc || pdfCurrentPageNum >= pdfCurrentDoc.numPages) return;
+  pdfCurrentPageNum++;
+  renderPdfPage(pdfCurrentPageNum);
+});
+document.getElementById('pdfZoomInBtn').addEventListener('click', () => {
+  if (!pdfCurrentDoc) return;
+  pdfCurrentScale = Math.min(3, pdfCurrentScale + 0.25);
+  renderPdfPage(pdfCurrentPageNum);
+});
+document.getElementById('pdfZoomOutBtn').addEventListener('click', () => {
+  if (!pdfCurrentDoc) return;
+  pdfCurrentScale = Math.max(0.5, pdfCurrentScale - 0.25);
+  renderPdfPage(pdfCurrentPageNum);
+});
+document.getElementById('pdfBackBtn').addEventListener('click', () => {
+  pdfCurrentDoc = null;
+  switchView('books');
+});
 
 document.getElementById('addBookBtn').addEventListener('click', () => {
   document.getElementById('bookFileInput').click();
