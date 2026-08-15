@@ -1851,8 +1851,15 @@ function openBookViewer(id, books) {
   }).then((pdf) => {
     pdfCurrentDoc = pdf;
     pdfCurrentPageNum = 1;
-    pdfCurrentScale = 1.2;
-    renderPdfPage(pdfCurrentPageNum);
+    // Стартовый масштаб подбираем так, чтобы страница по ширине заполняла экран,
+    // а не был на глаз зафиксирован — иначе на разных телефонах либо мелко, либо обрезано
+    return pdf.getPage(1).then((page) => {
+      const naturalWidth = page.getViewport({ scale: 1 }).width;
+      const wrap = document.getElementById('pdfCanvasWrap');
+      const availableWidth = wrap.clientWidth - 20; // минус внутренние отступы
+      pdfCurrentScale = Math.max(0.5, availableWidth / naturalWidth);
+      renderPdfPage(pdfCurrentPageNum);
+    });
   }).catch((err) => {
     console.error(err);
     document.getElementById('pdfLoading').textContent = 'Не удалось открыть файл — возможно, он повреждён';
@@ -1865,8 +1872,14 @@ function renderPdfPage(num) {
     const viewport = page.getViewport({ scale: pdfCurrentScale });
     const canvas = document.getElementById('pdfCanvas');
     const ctx = canvas.getContext('2d');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
+    // Рендерим с учётом плотности пикселей экрана (devicePixelRatio) — иначе на
+    // современных телефонах (обычно ×2–×3) текст на canvas выглядит смазанным
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(viewport.width * dpr);
+    canvas.height = Math.floor(viewport.height * dpr);
+    canvas.style.width = viewport.width + 'px';
+    canvas.style.height = viewport.height + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     page.render({ canvasContext: ctx, viewport }).promise.then(() => {
       document.getElementById('pdfLoading').style.display = 'none';
       canvas.style.display = 'block';

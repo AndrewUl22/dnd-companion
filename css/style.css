@@ -206,13 +206,14 @@ main {
   background: #4a4a4a;
   display: flex;
   align-items: flex-start;
-  justify-content: center;
+  justify-content: flex-start;
   padding: 10px;
 }
 .pdf-canvas-wrap canvas {
   background: #fff;
   box-shadow: 0 4px 14px #0006;
   max-width: none;
+  margin: 0 auto;
 }
 
 nav.tabbar {
