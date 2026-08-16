@@ -77,6 +77,19 @@ body[data-theme="ukraine"] {
   --success: #8fe0a8;
 }
 
+body[data-theme="ember"] {
+  --bg: #1c0f0a;
+  --bg-elevated: #2a160e;
+  --card: #331c12;
+  --card-border: #4d2c1a;
+  --accent: #ff9142;
+  --accent-soft: #ff914244;
+  --text: #fbe8d9;
+  --text-dim: #c9a084;
+  --danger: #ff6b5a;
+  --success: #8fbf7a;
+}
+
 * { box-sizing: border-box; }
 
 html, body {
@@ -129,9 +142,11 @@ header.topbar {
 }
 
 header.topbar h1 {
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
   font-size: 18px;
   margin: 0;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.4px;
 }
 
 header.topbar .icon-btn {
@@ -243,16 +258,20 @@ nav.tabbar button .tab-icon { font-size: 19px; }
 nav.tabbar button.active { color: var(--accent); }
 
 .card {
-  background: var(--card);
+  background: linear-gradient(165deg, var(--card) 0%, var(--bg-elevated) 130%);
   border: 1px solid var(--card-border);
   border-radius: var(--radius);
   padding: 14px;
   margin-bottom: 12px;
+  box-shadow: 0 3px 10px #00000030;
 }
 
 .card h3 {
   margin: 0 0 8px;
+  font-family: 'Cinzel', serif;
+  font-weight: 600;
   font-size: 15px;
+  letter-spacing: 0.3px;
   color: var(--accent);
   display: flex;
   justify-content: space-between;
@@ -508,6 +527,28 @@ button.block { width: 100%; margin-bottom: 8px; }
 .hp-track { display: flex; gap: 8px; align-items: center; }
 .hp-track input { text-align: center; }
 
+.hp-bar-track {
+  height: 14px;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.hp-bar-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, var(--danger), var(--accent));
+  border-radius: 8px;
+  transition: width .3s ease;
+}
+
+#sheetName {
+  font-family: 'Cinzel', serif;
+  font-weight: 600;
+  font-size: 17px;
+}
+
 .fab {
   position: fixed;
   right: 18px;
@@ -679,6 +720,7 @@ button.block { width: 100%; margin-bottom: 8px; }
   border-width: 3px;
   max-width: 80vw;
   max-height: 80vw;
+  box-shadow: 0 0 0 1px var(--accent-soft), 0 0 30px var(--accent-soft), 0 8px 24px #00000050;
 }
 .emoji-grid {
   display: grid;

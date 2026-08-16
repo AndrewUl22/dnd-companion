@@ -462,6 +462,7 @@ function openCharacter(id) {
   document.getElementById('hpCurrent').value = c.hp.current;
   document.getElementById('hpMax').value = c.hp.max;
   document.getElementById('hpTemp').value = c.hp.temp;
+  updateHpBar(c);
   document.getElementById('sheetHitDiceTotal').value = c.hitDice.total;
   document.getElementById('sheetHitDiceUsed').value = c.hitDice.used;
   document.getElementById('sheetWeaponProf').value = c.weaponProf;
@@ -1061,8 +1062,16 @@ bindAvatarPicker('sheetAvatar', () => getChar(currentCharId), '🧙', (record) =
     c.hp[field] = parseInt(document.getElementById(elId).value) || 0;
     saveState();
     renderCharList();
+    updateHpBar(c);
   });
 });
+
+function updateHpBar(c) {
+  const fill = document.getElementById('hpBarFill');
+  if (!fill) return;
+  const pct = c.hp.max > 0 ? Math.max(0, Math.min(100, (c.hp.current / c.hp.max) * 100)) : 0;
+  fill.style.width = pct + '%';
+}
 
 document.getElementById('backToList').addEventListener('click', () => switchView('characters'));
 document.getElementById('deleteCharBtn').addEventListener('click', () => {

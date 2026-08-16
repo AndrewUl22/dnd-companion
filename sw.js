@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dnd-companion-v31';
+const CACHE_NAME = 'dnd-companion-v32';
 const ASSETS = [
   './',
   './index.html',
@@ -19,7 +19,8 @@ const ASSETS = [
 // всё равно должно нормально закэшироваться и работать офлайн
 const CDN_ASSETS = [
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
+  'https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Cinzel+Decorative:wght@700&display=swap'
 ];
 
 self.addEventListener('install', (event) => {
