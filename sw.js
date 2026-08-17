@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dnd-companion-v32';
+const CACHE_NAME = 'dnd-companion-v33';
 const ASSETS = [
   './',
   './index.html',
@@ -11,8 +11,7 @@ const ASSETS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-splash.png',
-  './icons/bg-die.png',
-  './icons/bg-quill.png'
+  './icons/bg-emblem.png'
 ];
 // CDN-библиотека для чтения PDF — кэшируем отдельно и без риска для остального:
 // если в момент установки нет сети или CDN недоступен, всё остальное приложение

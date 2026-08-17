@@ -356,6 +356,12 @@ function newCharacter(name) {
     attacks: [],
     spellcastingAbility: '',
     cantripsKnown: 0,
+    customResources: [
+      { name: '', total: 0, used: 0 },
+      { name: '', total: 0, used: 0 },
+      { name: '', total: 0, used: 0 },
+      { name: '', total: 0, used: 0 }
+    ],
     spellSlots: { 1: { total: 0, used: 0 }, 2: { total: 0, used: 0 }, 3: { total: 0, used: 0 }, 4: { total: 0, used: 0 }, 5: { total: 0, used: 0 }, 6: { total: 0, used: 0 }, 7: { total: 0, used: 0 }, 8: { total: 0, used: 0 }, 9: { total: 0, used: 0 } },
     classFeatures: '', racialTraits: '', feats: '',
     appearance: '', backstory: '',
@@ -425,6 +431,8 @@ function migrateChar(c) {
   if (!c.attacks) c.attacks = [];
   if (c.spellcastingAbility === undefined) c.spellcastingAbility = '';
   if (c.cantripsKnown === undefined) c.cantripsKnown = 0;
+  if (!c.customResources || !Array.isArray(c.customResources)) c.customResources = [];
+  while (c.customResources.length < 4) c.customResources.push({ name: '', total: 0, used: 0 });
   if (!c.spellSlots) c.spellSlots = {};
   for (let lvl = 1; lvl <= 9; lvl++) {
     if (!c.spellSlots[lvl]) c.spellSlots[lvl] = { total: 0, used: 0 };
@@ -492,6 +500,7 @@ function openCharacter(id) {
   renderInventory(c);
   renderCharSpells(c);
   renderSpellSlots(c);
+  renderCustomResources(c);
   updateTotalAC(c);
   updateComputedStats(c);
   updateSpellcastingStats(c);
@@ -565,6 +574,50 @@ function renderSpellSlots(c) {
       if (btn.dataset.act === 'dec') slot.used = Math.max(0, slot.used - 1);
       saveState();
       wrap.querySelector(`.spell-slot-used-display[data-lvl="${lvl}"]`).textContent = `${slot.used}/${slot.total}`;
+    });
+  });
+}
+
+function renderCustomResources(c) {
+  const wrap = document.getElementById('customResourcesGrid');
+  wrap.innerHTML = c.customResources.map((res, idx) => `
+    <div class="resource-row" data-idx="${idx}">
+      <input type="text" class="resource-name-input" data-idx="${idx}" value="${escapeAttr(res.name)}" placeholder="Название (например, Ци)">
+      <input type="number" class="resource-total-input" data-idx="${idx}" min="0" value="${res.total}">
+      <div class="spell-slot-used-controls">
+        <button type="button" data-idx="${idx}" data-act="dec">−</button>
+        <span class="spell-slot-used-display" data-idx="${idx}">${res.used}/${res.total}</span>
+        <button type="button" data-idx="${idx}" data-act="inc">+</button>
+      </div>
+    </div>
+  `).join('');
+  wrap.querySelectorAll('.resource-name-input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const c = getChar(currentCharId);
+      c.customResources[inp.dataset.idx].name = inp.value;
+      saveState();
+    });
+  });
+  wrap.querySelectorAll('.resource-total-input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const c = getChar(currentCharId);
+      const idx = inp.dataset.idx;
+      const total = Math.max(0, parseInt(inp.value) || 0);
+      c.customResources[idx].total = total;
+      if (c.customResources[idx].used > total) c.customResources[idx].used = total;
+      saveState();
+      wrap.querySelector(`.spell-slot-used-display[data-idx="${idx}"]`).textContent = `${c.customResources[idx].used}/${total}`;
+    });
+  });
+  wrap.querySelectorAll('button[data-act]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const c = getChar(currentCharId);
+      const idx = btn.dataset.idx;
+      const res = c.customResources[idx];
+      if (btn.dataset.act === 'inc') res.used = Math.min(res.total, res.used + 1);
+      if (btn.dataset.act === 'dec') res.used = Math.max(0, res.used - 1);
+      saveState();
+      wrap.querySelector(`.spell-slot-used-display[data-idx="${idx}"]`).textContent = `${res.used}/${res.total}`;
     });
   });
 }
@@ -1077,9 +1130,11 @@ document.getElementById('backToList').addEventListener('click', () => switchView
 document.getElementById('deleteCharBtn').addEventListener('click', () => {
   if (!confirm('Удалить этого персонажа безвозвратно?')) return;
   state.characters = state.characters.filter(c => c.id !== currentCharId);
+  currentCharId = null;
   saveState();
   playChainClink();
   switchView('characters');
+  renderCharList();
 });
 
 // ==================== BESTIARY ====================

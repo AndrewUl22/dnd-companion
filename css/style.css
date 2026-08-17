@@ -114,11 +114,11 @@ body::before {
   content: '';
   position: fixed;
   inset: 0;
-  background-image: url('../icons/icon-splash.png');
+  background-image: url('../icons/bg-emblem.png');
   background-repeat: no-repeat;
-  background-position: center 38vh;
-  background-size: 360px 360px;
-  opacity: 0.07;
+  background-position: center center;
+  background-size: cover;
+  opacity: 0.035;
   filter: grayscale(0.3);
   pointer-events: none;
   z-index: 0;
@@ -814,6 +814,27 @@ button.block { width: 100%; margin-bottom: 8px; }
   text-align: center;
   color: var(--accent);
   font-weight: 600;
+}
+
+.resource-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--card-border);
+}
+.resource-row:last-child { border-bottom: none; }
+.resource-name-input {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+}
+.resource-total-input {
+  width: 44px;
+  text-align: center;
+  padding: 4px 2px;
+  margin: 0;
+  flex: none;
 }
 
 .avatar-circle img {
