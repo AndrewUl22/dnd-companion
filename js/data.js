@@ -175,5 +175,6 @@ const THEMES = [
   { id: "emerald", label: "Изумруд" },
   { id: "coffee", label: "Серо-чёрная" },
   { id: "ukraine", label: "Україна" },
-  { id: "ember", label: "Пламя" }
+  { id: "ember", label: "Пламя" },
+  { id: "irish", label: "Ирландский клевер" }
 ];

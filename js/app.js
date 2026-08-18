@@ -14,7 +14,7 @@ function loadState() {
     customRaces: [],
     customClasses: [],
     battle: { combatants: [], currentIndex: 0, round: 1 },
-    settings: { theme: 'dark', soundEnabled: true }
+    settings: { theme: 'dark', soundEnabled: true, diceSkin: 'ruby' }
   };
 }
 
@@ -27,7 +27,8 @@ if (!state.spells) state.spells = JSON.parse(JSON.stringify(DEFAULT_SPELLS)); //
 if (!state.customRaces) state.customRaces = [];
 if (!state.customClasses) state.customClasses = [];
 if (!state.battle) state.battle = { combatants: [], currentIndex: 0, round: 1 };
-if (!state.settings) state.settings = { theme: 'dark', soundEnabled: true };
+if (!state.settings) state.settings = { theme: 'dark', soundEnabled: true, diceSkin: 'ruby' };
+if (!state.settings.diceSkin) state.settings.diceSkin = 'ruby';
 
 function applyTheme() {
   document.body.setAttribute('data-theme', state.settings.theme || 'dark');
@@ -2089,10 +2090,90 @@ soundToggle.addEventListener('change', () => {
   if (soundToggle.checked) playChainClink();
 });
 
-// ==================== DICE ROLLER ====================
+// ==================== DICE ROLLER (SVG-кубики со скинами) ====================
 const DICE_TYPES = [4, 6, 8, 10, 12, 20, 100];
 let diceHistory = [];
 let selectedDie = 20;
+
+const DICE_SKINS = {
+  ruby: { label: 'Рубиновый', stops: ['#3a030f', '#d81e3f', '#7a0d1f'], rim: '#e0b13f', text: '#fff5e0' },
+  gold: { label: 'Золотой', stops: ['#4a3608', '#e0b13f', '#8a6a1c'], rim: '#fff2c9', text: '#2a1c04' },
+  emerald: { label: 'Изумрудный', stops: ['#04331e', '#2e9e63', '#0d4a2d'], rim: '#d7f5e3', text: '#eafff3' },
+  amethyst: { label: 'Аметистовый', stops: ['#220433', '#8a4fd8', '#3a0d6e'], rim: '#e3c9ff', text: '#f5e9ff' },
+  obsidian: { label: 'Обсидиановый', stops: ['#050506', '#2a2a33', '#0a0a0d'], rim: '#4fd8d8', text: '#e8ffff' }
+};
+const DICE_SKIN_IDS = Object.keys(DICE_SKINS);
+
+function currentDiceSkin() {
+  return state.settings.diceSkin && DICE_SKINS[state.settings.diceSkin] ? state.settings.diceSkin : 'ruby';
+}
+
+// Точки многоугольника для каждого типа кости (viewBox 100×100)
+function diePolygonPoints(sides) {
+  switch (sides) {
+    case 4: return '50,8 90,85 10,85';
+    case 8: return '50,5 90,50 50,95 10,50';
+    case 10: return '50,5 78,25 70,95 30,95 22,25';
+    case 12: return '50,5 90,38 75,90 25,90 10,38';
+    case 20: case 100: return '50,5 90,27 90,73 50,95 10,73 10,27';
+    default: return '';
+  }
+}
+
+function buildDieSvg(sides, skinId, faceLabel) {
+  const skin = DICE_SKINS[skinId] || DICE_SKINS.ruby;
+  const gradId = 'dieGrad_' + skinId;
+  const gradientStops = `<stop offset="0%" stop-color="${skin.stops[0]}"/><stop offset="55%" stop-color="${skin.stops[1]}"/><stop offset="100%" stop-color="${skin.stops[2]}"/>`;
+  const bodyShape = sides === 6
+    ? `<rect x="12" y="12" width="76" height="76" rx="14" fill="url(#${gradId})" stroke="${skin.rim}" stroke-width="3"/>`
+    : `<polygon points="${diePolygonPoints(sides)}" fill="url(#${gradId})" stroke="${skin.rim}" stroke-width="3" stroke-linejoin="round"/>`;
+  const showFacets = sides === 20 || sides === 100;
+  const facets = showFacets ? diePolygonPoints(sides).split(' ').map(pt => {
+    const [x, y] = pt.split(',');
+    return `<line x1="50" y1="50" x2="${x}" y2="${y}" stroke="${skin.rim}" stroke-width="1" opacity="0.45"/>`;
+  }).join('') : '';
+  const fontSize = sides === 100 ? 26 : 30;
+  return `<svg viewBox="0 0 100 100" width="170" height="170" class="die-svg">
+    <defs><linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="100%">${gradientStops}</linearGradient></defs>
+    ${bodyShape}${facets}
+    <text x="50" y="52" text-anchor="middle" dominant-baseline="central" font-size="${fontSize}" font-weight="800" fill="${skin.text}" font-family="'Cinzel', serif">${faceLabel}</text>
+  </svg>`;
+}
+
+function renderDieDisplay(faceValue) {
+  const wrap = document.getElementById('dieDisplayWrap');
+  if (!wrap) return;
+  const label = selectedDie === 100 ? '00' : String(faceValue);
+  wrap.innerHTML = buildDieSvg(selectedDie, currentDiceSkin(), label);
+}
+
+function triggerCritEffect(kind) {
+  const wrap = document.getElementById('dieDisplayWrap');
+  if (!wrap) return;
+  wrap.classList.remove('die-crit-gold', 'die-crit-fail');
+  void wrap.offsetWidth; // рестарт CSS-анимации
+  wrap.classList.add(kind === 'crit' ? 'die-crit-gold' : 'die-crit-fail');
+  setTimeout(() => wrap.classList.remove('die-crit-gold', 'die-crit-fail'), 900);
+}
+
+function animateDiceRoll(finalValue, onDone) {
+  const wrap = document.getElementById('dieDisplayWrap');
+  if (!wrap) { onDone(); return; }
+  wrap.classList.add('die-shaking');
+  let ticks = 0;
+  const maxTicks = 10;
+  const timer = setInterval(() => {
+    ticks++;
+    const randomFace = 1 + Math.floor(Math.random() * selectedDie);
+    renderDieDisplay(randomFace);
+    if (ticks >= maxTicks) {
+      clearInterval(timer);
+      wrap.classList.remove('die-shaking');
+      renderDieDisplay(finalValue);
+      onDone();
+    }
+  }, 60);
+}
 
 function openDiceRoller() {
   renderDiceModal();
@@ -2100,11 +2181,20 @@ function openDiceRoller() {
 
 function renderDiceModal() {
   const buttons = DICE_TYPES.map(d => `<button type="button" class="chip dice-btn ${d === selectedDie ? 'active' : ''}" data-d="${d}">d${d}</button>`).join('');
+  const skinSwatches = DICE_SKIN_IDS.map(id => {
+    const s = DICE_SKINS[id];
+    const grad = `linear-gradient(160deg, ${s.stops[0]}, ${s.stops[1]}, ${s.stops[2]})`;
+    return `<button type="button" class="dice-skin-swatch ${currentDiceSkin() === id ? 'is-selected' : ''}" data-skin="${id}" style="background:${grad};border-color:${s.rim}" title="${s.label}"></button>`;
+  }).join('');
   const historyHtml = diceHistory.length
     ? diceHistory.slice(0, 12).map(h => `<div class="skill-row"><span>${h.label}</span><span class="mod">${h.total}${h.rolls ? ' (' + h.rolls.join('+') + (h.mod ? (h.mod > 0 ? '+' + h.mod : h.mod) : '') + ')' : ''}</span></div>`).join('')
     : '<div class="empty-state" style="padding:10px 0">Пока не было бросков</div>';
   openModal('Кубики', `
+    <div class="chip-row dice-skin-row">${skinSwatches}</div>
     <div class="chip-row" id="diceButtons" style="flex-wrap:wrap">${buttons}</div>
+    <div class="die-display-outer">
+      <div id="dieDisplayWrap" class="die-display-wrap"></div>
+    </div>
     <div class="row" style="margin-top:8px">
       <div>
         <label>Количество костей</label>
@@ -2116,14 +2206,25 @@ function renderDiceModal() {
       </div>
     </div>
     <button class="primary block" id="rollDiceBtn">Бросить</button>
-    <div id="diceResultBig" style="text-align:center;font-size:48px;font-weight:700;color:var(--accent);margin:12px 0">—</div>
     <div class="section-title" style="margin-top:4px">История</div>
     <div id="diceHistoryList">${historyHtml}</div>
   `);
+  renderDieDisplay(selectedDie === 100 ? 0 : selectedDie);
+
+  document.querySelectorAll('.dice-skin-swatch').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.settings.diceSkin = btn.dataset.skin;
+      saveState();
+      document.querySelectorAll('.dice-skin-swatch').forEach(b => b.classList.toggle('is-selected', b === btn));
+      renderDieDisplay(selectedDie === 100 ? 0 : selectedDie);
+      playFormatClick();
+    });
+  });
   document.querySelectorAll('.dice-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       selectedDie = parseInt(btn.dataset.d);
       document.querySelectorAll('.dice-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.d) === selectedDie));
+      renderDieDisplay(selectedDie === 100 ? 0 : selectedDie);
     });
   });
   document.getElementById('rollDiceBtn').addEventListener('click', () => {
@@ -2133,10 +2234,15 @@ function renderDiceModal() {
     for (let i = 0; i < count; i++) rolls.push(1 + Math.floor(Math.random() * selectedDie));
     const total = rolls.reduce((a, b) => a + b, 0) + modifier;
     const label = `${count}к${selectedDie}${modifier ? (modifier > 0 ? '+' + modifier : modifier) : ''}`;
-    diceHistory.unshift({ label, total, rolls, mod: modifier });
-    document.getElementById('diceResultBig').textContent = total;
-    document.getElementById('diceHistoryList').innerHTML = diceHistory.slice(0, 12).map(h => `<div class="skill-row"><span>${h.label}</span><span class="mod">${h.total}${h.rolls.length > 1 || h.mod ? ' (' + h.rolls.join('+') + (h.mod ? (h.mod > 0 ? '+' + h.mod : h.mod) : '') + ')' : ''}</span></div>`).join('');
     playDiceRoll();
+    animateDiceRoll(rolls[0], () => {
+      diceHistory.unshift({ label, total, rolls, mod: modifier });
+      document.getElementById('diceHistoryList').innerHTML = diceHistory.slice(0, 12).map(h => `<div class="skill-row"><span>${h.label}</span><span class="mod">${h.total}${h.rolls.length > 1 || h.mod ? ' (' + h.rolls.join('+') + (h.mod ? (h.mod > 0 ? '+' + h.mod : h.mod) : '') + ')' : ''}</span></div>`).join('');
+      if (selectedDie === 20 && count === 1) {
+        if (rolls[0] === 20) triggerCritEffect('crit');
+        else if (rolls[0] === 1) triggerCritEffect('fail');
+      }
+    });
   });
 }
 

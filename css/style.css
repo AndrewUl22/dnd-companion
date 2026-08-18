@@ -90,6 +90,19 @@ body[data-theme="ember"] {
   --success: #8fbf7a;
 }
 
+body[data-theme="irish"] {
+  --bg: #0e2818;
+  --bg-elevated: #153621;
+  --card: #1c422a;
+  --card-border: #2f6640;
+  --accent: #e0b13f;
+  --accent-soft: #e0b13f33;
+  --text: #eafbf0;
+  --text-dim: #a8cdb6;
+  --danger: #e07a5f;
+  --success: #6fcf7f;
+}
+
 * { box-sizing: border-box; }
 
 html, body {
@@ -736,6 +749,62 @@ button.block { width: 100%; margin-bottom: 8px; }
   cursor: pointer;
 }
 .dice-btn { min-width: 52px; text-align: center; }
+
+.dice-skin-row { margin-bottom: 4px; }
+.dice-skin-swatch {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--card-border);
+  flex: none;
+  cursor: pointer;
+}
+.dice-skin-swatch.is-selected {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+
+.die-display-outer {
+  display: flex;
+  justify-content: center;
+  padding: 14px 0;
+}
+.die-display-wrap {
+  width: 170px;
+  height: 170px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 6px 14px #00000060);
+}
+.die-svg polygon, .die-svg rect { transition: filter .15s ease; }
+
+@keyframes dieShake {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  15% { transform: translateY(-18px) rotate(-12deg); }
+  30% { transform: translateY(-30px) rotate(90deg); }
+  45% { transform: translateY(-14px) rotate(200deg); }
+  60% { transform: translateY(-24px) rotate(280deg); }
+  75% { transform: translateY(-6px) rotate(345deg); }
+  90% { transform: translateY(-2px) rotate(358deg); }
+}
+.die-display-wrap.die-shaking {
+  animation: dieShake .6s cubic-bezier(.3,.6,.4,1);
+}
+
+@keyframes dieCritGold {
+  0% { filter: drop-shadow(0 6px 14px #00000060) drop-shadow(0 0 0 #ffd76a00); transform: scale(1); }
+  35% { filter: drop-shadow(0 6px 14px #00000060) drop-shadow(0 0 26px #ffd76aee); transform: scale(1.12); }
+  100% { filter: drop-shadow(0 6px 14px #00000060) drop-shadow(0 0 0 #ffd76a00); transform: scale(1); }
+}
+.die-display-wrap.die-crit-gold { animation: dieCritGold .9s ease; }
+
+@keyframes dieCritFail {
+  0%, 100% { filter: drop-shadow(0 6px 14px #00000060) drop-shadow(0 0 0 #ff3b3b00); transform: translateX(0); }
+  20% { filter: drop-shadow(0 6px 14px #00000060) drop-shadow(0 0 20px #ff3b3bcc); transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { filter: drop-shadow(0 6px 14px #00000060) drop-shadow(0 0 20px #ff3b3bcc); transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+.die-display-wrap.die-crit-fail { animation: dieCritFail .9s ease; }
 
 .expand-btn {
   background: var(--bg-elevated);
