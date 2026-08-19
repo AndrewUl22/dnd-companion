@@ -2132,7 +2132,10 @@ function buildDieSvg(sides, skinId, faceLabel) {
     const [x, y] = pt.split(',');
     return `<line x1="50" y1="50" x2="${x}" y2="${y}" stroke="${skin.rim}" stroke-width="1" opacity="0.45"/>`;
   }).join('') : '';
-  const fontSize = sides === 100 ? 26 : 30;
+  // Размер шрифта подстраивается под количество цифр — иначе трёхзначные
+  // числа (например, 100 или сумма нескольких костей) вылезают за грань
+  const digits = String(faceLabel).length;
+  const fontSize = digits >= 4 ? 20 : digits === 3 ? 24 : 30;
   return `<svg viewBox="0 0 100 100" width="170" height="170" class="die-svg">
     <defs><linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="100%">${gradientStops}</linearGradient></defs>
     ${bodyShape}${facets}
@@ -2143,8 +2146,9 @@ function buildDieSvg(sides, skinId, faceLabel) {
 function renderDieDisplay(faceValue) {
   const wrap = document.getElementById('dieDisplayWrap');
   if (!wrap) return;
-  const label = selectedDie === 100 ? '00' : String(faceValue);
-  wrap.innerHTML = buildDieSvg(selectedDie, currentDiceSkin(), label);
+  // Раньше здесь была жёстко зашита заглушка "00" для d100 — теперь всегда
+  // показываем реальное переданное значение
+  wrap.innerHTML = buildDieSvg(selectedDie, currentDiceSkin(), String(faceValue));
 }
 
 function triggerCritEffect(kind) {
@@ -2235,7 +2239,7 @@ function renderDiceModal() {
     const total = rolls.reduce((a, b) => a + b, 0) + modifier;
     const label = `${count}к${selectedDie}${modifier ? (modifier > 0 ? '+' + modifier : modifier) : ''}`;
     playDiceRoll();
-    animateDiceRoll(rolls[0], () => {
+    animateDiceRoll(total, () => {
       diceHistory.unshift({ label, total, rolls, mod: modifier });
       document.getElementById('diceHistoryList').innerHTML = diceHistory.slice(0, 12).map(h => `<div class="skill-row"><span>${h.label}</span><span class="mod">${h.total}${h.rolls.length > 1 || h.mod ? ' (' + h.rolls.join('+') + (h.mod ? (h.mod > 0 ? '+' + h.mod : h.mod) : '') + ')' : ''}</span></div>`).join('');
       if (selectedDie === 20 && count === 1) {

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dnd-companion-v34';
+const CACHE_NAME = 'dnd-companion-v35';
 const ASSETS = [
   './',
   './index.html',
