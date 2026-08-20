@@ -2128,17 +2128,27 @@ function buildDieSvg(sides, skinId, faceLabel) {
     ? `<rect x="12" y="12" width="76" height="76" rx="14" fill="url(#${gradId})" stroke="${skin.rim}" stroke-width="3"/>`
     : `<polygon points="${diePolygonPoints(sides)}" fill="url(#${gradId})" stroke="${skin.rim}" stroke-width="3" stroke-linejoin="round"/>`;
   const showFacets = sides === 20 || sides === 100;
-  const facets = showFacets ? diePolygonPoints(sides).split(' ').map(pt => {
-    const [x, y] = pt.split(',');
-    return `<line x1="50" y1="50" x2="${x}" y2="${y}" stroke="${skin.rim}" stroke-width="1" opacity="0.45"/>`;
-  }).join('') : '';
+  let facets = '';
+  let flavorNumbers = '';
+  if (showFacets) {
+    const pts = diePolygonPoints(sides).split(' ').map(p => p.split(',').map(Number));
+    facets = pts.map(([x, y]) => `<line x1="50" y1="50" x2="${x}" y2="${y}" stroke="${skin.rim}" stroke-width="1" opacity="0.45"/>`).join('');
+    // Декоративные "соседние грани" вокруг центральной — как у настоящего гранёного кубика.
+    // Числа фиксированные (это просто внешний вид граней, а не реальный результат броска)
+    const flavors = [4, 14, 9, 16, 10, 18];
+    flavorNumbers = pts.map(([x, y], i) => {
+      const [nx, ny] = pts[(i + 1) % pts.length];
+      const tx = (x + nx + 50) / 3, ty = (y + ny + 50) / 3;
+      return `<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="central" font-size="9" font-weight="700" fill="${skin.text}" opacity="0.4" font-family="'Cinzel', serif">${flavors[i]}</text>`;
+    }).join('');
+  }
   // Размер шрифта подстраивается под количество цифр — иначе трёхзначные
   // числа (например, 100 или сумма нескольких костей) вылезают за грань
   const digits = String(faceLabel).length;
-  const fontSize = digits >= 4 ? 20 : digits === 3 ? 24 : 30;
+  const fontSize = digits >= 4 ? 20 : digits === 3 ? 24 : (showFacets ? 34 : 30);
   return `<svg viewBox="0 0 100 100" width="170" height="170" class="die-svg">
     <defs><linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="100%">${gradientStops}</linearGradient></defs>
-    ${bodyShape}${facets}
+    ${bodyShape}${facets}${flavorNumbers}
     <text x="50" y="52" text-anchor="middle" dominant-baseline="central" font-size="${fontSize}" font-weight="800" fill="${skin.text}" font-family="'Cinzel', serif">${faceLabel}</text>
   </svg>`;
 }
@@ -2183,6 +2193,9 @@ function openDiceRoller() {
   renderDiceModal();
 }
 
+let diceModifier = 0;
+let diceAdvMode = 'none'; // 'none' | 'adv' | 'dis' — работает только для одиночного d20
+
 function renderDiceModal() {
   const buttons = DICE_TYPES.map(d => `<button type="button" class="chip dice-btn ${d === selectedDie ? 'active' : ''}" data-d="${d}">d${d}</button>`).join('');
   const skinSwatches = DICE_SKIN_IDS.map(id => {
@@ -2199,18 +2212,26 @@ function renderDiceModal() {
     <div class="die-display-outer">
       <div id="dieDisplayWrap" class="die-display-wrap"></div>
     </div>
-    <div class="row" style="margin-top:8px">
-      <div>
-        <label>Количество костей</label>
-        <input id="diceCount" type="number" min="1" max="20" value="1">
-      </div>
-      <div>
-        <label>Модификатор</label>
-        <input id="diceMod" type="number" value="0">
+    <label style="text-align:center">Количество костей</label>
+    <input id="diceCount" type="number" min="1" max="20" value="1" style="text-align:center;margin-bottom:10px">
+    <div class="dice-mod-row">
+      <span class="dice-mod-label">Модификатор</span>
+      <div class="dice-mod-stepper">
+        <button type="button" class="dice-mod-btn" id="diceModDec">−</button>
+        <span class="dice-mod-value" id="diceModValue">${fmtMod(diceModifier)}</span>
+        <button type="button" class="dice-mod-btn" id="diceModInc">+</button>
       </div>
     </div>
-    <button class="primary block" id="rollDiceBtn">Бросить</button>
-    <div class="section-title" style="margin-top:4px">История</div>
+    <div class="dice-adv-row">
+      <span class="dice-adv-label">Преимущество / Помеха</span>
+      <div class="dice-adv-toggle">
+        <button type="button" class="dice-adv-btn ${diceAdvMode === 'none' ? 'active' : ''}" data-adv="none">Обычно</button>
+        <button type="button" class="dice-adv-btn ${diceAdvMode === 'adv' ? 'active' : ''}" data-adv="adv">Преим.</button>
+        <button type="button" class="dice-adv-btn ${diceAdvMode === 'dis' ? 'active' : ''}" data-adv="dis">Помеха</button>
+      </div>
+    </div>
+    <button class="roll-dice-gold-btn" id="rollDiceBtn">⚅ Бросить</button>
+    <div class="section-title" style="margin-top:10px">История</div>
     <div id="diceHistoryList">${historyHtml}</div>
   `);
   renderDieDisplay(selectedDie === 100 ? 0 : selectedDie);
@@ -2231,18 +2252,45 @@ function renderDiceModal() {
       renderDieDisplay(selectedDie === 100 ? 0 : selectedDie);
     });
   });
+  document.getElementById('diceModDec').addEventListener('click', () => {
+    diceModifier--;
+    document.getElementById('diceModValue').textContent = fmtMod(diceModifier);
+    playFormatClick();
+  });
+  document.getElementById('diceModInc').addEventListener('click', () => {
+    diceModifier++;
+    document.getElementById('diceModValue').textContent = fmtMod(diceModifier);
+    playFormatClick();
+  });
+  document.querySelectorAll('.dice-adv-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      diceAdvMode = btn.dataset.adv;
+      document.querySelectorAll('.dice-adv-btn').forEach(b => b.classList.toggle('active', b === btn));
+      playFormatClick();
+    });
+  });
   document.getElementById('rollDiceBtn').addEventListener('click', () => {
-    const count = Math.max(1, Math.min(20, parseInt(document.getElementById('diceCount').value) || 1));
-    const modifier = parseInt(document.getElementById('diceMod').value) || 0;
-    const rolls = [];
-    for (let i = 0; i < count; i++) rolls.push(1 + Math.floor(Math.random() * selectedDie));
+    const modifier = diceModifier;
+    const useAdv = diceAdvMode !== 'none' && selectedDie === 20;
+    let rolls, label;
+    if (useAdv) {
+      const r1 = 1 + Math.floor(Math.random() * 20);
+      const r2 = 1 + Math.floor(Math.random() * 20);
+      const picked = diceAdvMode === 'adv' ? Math.max(r1, r2) : Math.min(r1, r2);
+      rolls = [picked];
+      label = `d20 ${diceAdvMode === 'adv' ? '(преим.)' : '(помеха)'}${modifier ? (modifier > 0 ? '+' + modifier : modifier) : ''} [${r1},${r2}]`;
+    } else {
+      const count = Math.max(1, Math.min(20, parseInt(document.getElementById('diceCount').value) || 1));
+      rolls = [];
+      for (let i = 0; i < count; i++) rolls.push(1 + Math.floor(Math.random() * selectedDie));
+      label = `${count}к${selectedDie}${modifier ? (modifier > 0 ? '+' + modifier : modifier) : ''}`;
+    }
     const total = rolls.reduce((a, b) => a + b, 0) + modifier;
-    const label = `${count}к${selectedDie}${modifier ? (modifier > 0 ? '+' + modifier : modifier) : ''}`;
     playDiceRoll();
     animateDiceRoll(total, () => {
       diceHistory.unshift({ label, total, rolls, mod: modifier });
       document.getElementById('diceHistoryList').innerHTML = diceHistory.slice(0, 12).map(h => `<div class="skill-row"><span>${h.label}</span><span class="mod">${h.total}${h.rolls.length > 1 || h.mod ? ' (' + h.rolls.join('+') + (h.mod ? (h.mod > 0 ? '+' + h.mod : h.mod) : '') + ')' : ''}</span></div>`).join('');
-      if (selectedDie === 20 && count === 1) {
+      if (selectedDie === 20 && rolls.length === 1) {
         if (rolls[0] === 20) triggerCritEffect('crit');
         else if (rolls[0] === 1) triggerCritEffect('fail');
       }

@@ -782,6 +782,18 @@ button.block { width: 100%; margin-bottom: 8px; }
   display: flex;
   justify-content: center;
   padding: 14px 0;
+  position: relative;
+}
+.die-display-outer::before {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 220px; height: 220px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, var(--accent-soft) 0%, transparent 68%);
+  filter: blur(4px);
+  pointer-events: none;
+  z-index: 0;
 }
 .die-display-wrap {
   width: 170px;
@@ -790,6 +802,8 @@ button.block { width: 100%; margin-bottom: 8px; }
   align-items: center;
   justify-content: center;
   filter: drop-shadow(0 6px 14px #00000060);
+  position: relative;
+  z-index: 1;
 }
 .die-svg polygon, .die-svg rect { transition: filter .15s ease; }
 
@@ -821,6 +835,73 @@ button.block { width: 100%; margin-bottom: 8px; }
   80% { transform: translateX(4px); }
 }
 .die-display-wrap.die-crit-fail { animation: dieCritFail .9s ease; }
+
+.dice-mod-row, .dice-adv-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+.dice-mod-label, .dice-adv-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+}
+.dice-mod-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dice-mod-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 30px;
+  text-align: center;
+  font-family: 'Cinzel', serif;
+}
+.dice-mod-btn {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #1b1530;
+  border: none;
+  font-size: 16px;
+  font-weight: 800;
+}
+.dice-adv-toggle {
+  display: flex;
+  gap: 4px;
+}
+.dice-adv-btn {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  color: var(--text-dim);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 11px;
+}
+.dice-adv-btn.active { background: var(--accent); color: #1b1530; border-color: var(--accent); font-weight: 700; }
+
+.roll-dice-gold-btn {
+  width: 100%;
+  background: linear-gradient(160deg, #e0b13f, #a8790a);
+  color: #2a1c04;
+  border: 2px solid #fff2c9;
+  border-radius: 14px;
+  padding: 14px;
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  box-shadow: 0 4px 14px #00000050;
+}
 
 .expand-btn {
   background: var(--bg-elevated);
