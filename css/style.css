@@ -1030,9 +1030,25 @@ button.block { width: 100%; margin-bottom: 8px; }
   width: 100%; height: 100%;
   border-radius: inherit;
   object-fit: cover;
+  image-rendering: -webkit-optimize-contrast;
 }
 .avatar-circle.small img { width: 100%; height: 100%; }
 .avatar-circle svg { width: 60%; height: 60%; }
+.avatar-video-slot {
+  display: block;
+  width: 100%; height: 100%;
+  border-radius: inherit;
+  overflow: hidden;
+}
+/* Единый стиль для видео (mp4/webm) и GIF/картинок, сохранённых напрямую как Blob */
+.avatar-video-slot video,
+.avatar-video-slot img {
+  width: 100%; height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+  display: block;
+  image-rendering: -webkit-optimize-contrast;
+}
 
 .expanded-editor-textarea {
   width: 100%;

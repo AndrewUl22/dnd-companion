@@ -37,7 +37,8 @@ const DEFAULT_BESTIARY = [
   {
     id: "b_goblin",
     name: "Гоблин",
-    type: "Гуманоид (гоблиноид)",
+    type: "Гуманоид",
+    subtype: "гоблиноид",
     cr: "1/4",
     size: "Маленький",
     habitat: ["Лес", "Подземье", "Холмы"],
@@ -67,7 +68,8 @@ const DEFAULT_BESTIARY = [
   {
     id: "b_orc",
     name: "Орк",
-    type: "Гуманоид (орк)",
+    type: "Гуманоид",
+    subtype: "орк",
     cr: "1/2",
     size: "Средний",
     habitat: ["Горы", "Холмы", "Равнина"],

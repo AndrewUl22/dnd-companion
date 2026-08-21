@@ -39,6 +39,7 @@ applyTheme();
 let currentCharId = null;
 let activeView = 'characters';
 let bestiaryFilter = 'Все';
+let bestiarySubtypeFilter = 'Все';
 let bestiaryCrFilter = 'Все';
 let bestiarySizeFilter = 'Все';
 let bestiaryHabitatFilter = 'Все';
@@ -180,18 +181,67 @@ function openListPicker(useAux, title, items, rowHtmlFn, onPick, searchFn) {
 }
 
 // ==================== AVATAR PICKER ====================
-// Аватар может быть либо эмодзи (record.avatar), либо загруженной картинкой (record.avatarImage, dataURL).
-// Картинка, если есть, имеет приоритет над эмодзи.
+// Аватар может быть эмодзи (record.avatar), загруженной статичной картинкой,
+// прогнанной через Canvas (record.avatarImage, dataURL), или "сырым" медиа —
+// видео (mp4/webm) либо GIF-анимацией — сохранённым БЕЗ прогона через Canvas
+// как Blob в IndexedDB (record.avatarVideoId — ссылка на запись, см.
+// books.js: saveAvatarVideo/getAvatarVideo; поле хранит id как для видео,
+// так и для GIF — сам тип определяется по record.mime при отображении).
+// Blob не хранится в самой записи (localStorage слишком мал для этого),
+// поэтому рендерится в два шага: сразу выводится заглушка с data-video-id,
+// а затем hydrateAvatarVideos() асинхронно подставляет туда <video> или <img>
+// в зависимости от MIME-типа сохранённого файла.
+// Приоритет: видео/GIF > статичная картинка > эмодзи.
+// Используется одинаково везде: персонажи, бестиарий, предметы — единая логика.
 function avatarInnerHtml(record, fallbackEmoji) {
+  if (record && record.avatarVideoId) {
+    return `<span class="avatar-video-slot" data-video-id="${escapeAttr(record.avatarVideoId)}">${avatarInnerHtml({ avatarImage: record.avatarImage, avatar: record.avatar }, fallbackEmoji)}</span>`;
+  }
   if (record && record.avatarImage) return `<img src="${record.avatarImage}" alt="">`;
   const val = (record && record.avatar) || fallbackEmoji || '🧙';
   // Собственные сгенерированные SVG-иконки (CUSTOM_ITEM_ICONS) не экранируем — это не пользовательский ввод
   if (typeof val === 'string' && val.trim().startsWith('<svg')) return val;
   return escapeHtml(val);
 }
+// Находит все ещё не гидрированные видео-заглушки внутри container (по
+// умолчанию — весь документ) и асинхронно подставляет в них <video>,
+// доставая blob из IndexedDB. Вызывается после любого рендера, который мог
+// вывести аватар с видео (список бестиария, карточка существа, форма).
+function hydrateAvatarVideos(container) {
+  const root = container || document;
+  const slots = root.querySelectorAll ? root.querySelectorAll('.avatar-video-slot[data-video-id]') : [];
+  slots.forEach((slot) => {
+    const id = slot.dataset.videoId;
+    getAvatarVideo(id).then((rec) => {
+      if (!rec || !rec.blob) return;
+      const url = URL.createObjectURL(rec.blob);
+      const isVideo = !!(rec.mime && rec.mime.startsWith('video/'));
+      slot.innerHTML = '';
+      if (isVideo) {
+        const video = document.createElement('video');
+        video.src = url;
+        video.autoplay = true;
+        video.loop = true;
+        video.muted = true;
+        video.playsInline = true;
+        slot.appendChild(video);
+      } else {
+        // GIF (или другая анимация), сохранённая напрямую как Blob без прогона через Canvas
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = '';
+        slot.appendChild(img);
+      }
+    }).catch(() => { /* медиафайл не найден — оставляем заглушку (эмодзи/фото) */ });
+  });
+}
 function avatarPickerHtml(id, record, fallbackEmoji, large) {
   return `<button type="button" class="avatar-circle${large ? ' large' : ''}" id="${id}">${avatarInnerHtml(record, fallbackEmoji)}</button>`;
 }
+// Масштабирует СТАТИЧНОЕ изображение (JPG/PNG/WebP и т.п.) через Canvas:
+// по большей стороне до maxDim, с качественным сглаживанием, чтобы картинка
+// не "замыливалась" на экранах с высоким разрешением (retina и т.п.).
+// Видео и GIF сюда не попадают — см. bindAvatarPicker ниже (saveAvatarVideo).
 function resizeImageFile(file, maxDim, cb) {
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -202,76 +252,126 @@ function resizeImageFile(file, maxDim, cb) {
       else if (h > maxDim) { w = Math.round(w * maxDim / h); h = maxDim; }
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      cb(canvas.toDataURL('image/jpeg', 0.82));
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, w, h);
+      cb(canvas.toDataURL('image/jpeg', 0.90));
     };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
-function bindAvatarPicker(btnId, recordOrGetter, fallbackEmoji, onChange) {
+// Единая точка загрузки медиа для аватарок ЛЮБОЙ сущности (персонажи,
+// существа/бестиарий, предметы/инвентарь). Принимает картинки (в т.ч. GIF)
+// и видео (MP4/WebM) через один input с accept="image/*,video/mp4,video/webm".
+// Умно определяет тип по file.type:
+// - видео (video/mp4, video/webm, вообще любой video/*) или GIF-анимация
+//   (image/gif) сохраняются НАПРЯМУЮ как Blob в IndexedDB, без прогона через
+//   Canvas — иначе анимация и качество ломаются;
+// - обычные статичные изображения (JPG/PNG/WebP) идут через Canvas
+//   (resizeImageFile) — масштабируются и пережимаются в JPEG.
+function bindAvatarPicker(btnId, recordOrGetter, fallbackEmoji, onChange, opts) {
   const btn = document.getElementById(btnId);
   const getRecord = () => (typeof recordOrGetter === 'function') ? recordOrGetter() : recordOrGetter;
+  const refreshBtn = () => {
+    const rec = getRecord();
+    btn.innerHTML = avatarInnerHtml(rec, fallbackEmoji);
+    hydrateAvatarVideos(btn);
+  };
   btn.addEventListener('click', () => {
     const record = getRecord();
     const grid = EMOJI_PALETTE.map(e => `<button type="button" class="emoji-choice" data-e="${e}">${e}</button>`).join('');
     openAvatarModal('Выберите иконку', `
-      <button class="primary block" id="uploadPhotoBtn">📷 Загрузить фото (PNG/JPG)</button>
-      <input type="file" id="uploadPhotoInput" accept="image/*" style="display:none">
-      ${record && record.avatarImage ? '<button class="secondary block" id="removePhotoBtn">Убрать фото, вернуть эмодзи</button>' : ''}
+      <button class="primary block" id="uploadMediaBtn">📷 Загрузить фото / GIF / видео</button>
+      <input type="file" id="uploadMediaInput" accept="image/*,video/mp4,video/webm" style="display:none">
+      ${record && (record.avatarImage || record.avatarVideoId) ? `<button class="secondary block" id="removePhotoBtn" style="margin-top:8px">Убрать ${record.avatarVideoId ? 'медиа' : 'фото'}, вернуть эмодзи</button>` : ''}
       <div class="section-title" style="margin-top:10px">Или выберите эмодзи</div>
       <div class="emoji-grid">${grid}</div>
       <label style="margin-top:10px">Или впишите свой символ/эмодзи</label>
       <input id="customEmojiInput" maxlength="4" placeholder="🐲">
       <button class="primary block" id="customEmojiConfirm">Использовать</button>
     `);
-    document.getElementById('uploadPhotoBtn').addEventListener('click', () => document.getElementById('uploadPhotoInput').click());
-    document.getElementById('uploadPhotoInput').addEventListener('change', (e) => {
+    document.getElementById('uploadMediaBtn').addEventListener('click', () => document.getElementById('uploadMediaInput').click());
+    document.getElementById('uploadMediaInput').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      resizeImageFile(file, 300, (dataUrl) => {
+      const isRawMedia = file.type === 'image/gif' || file.type.startsWith('video/');
+      if (isRawMedia) {
+        if (file.size > 30 * 1024 * 1024) {
+          showToast('Файл слишком большой (максимум 30 МБ)');
+          e.target.value = '';
+          return;
+        }
         const rec = getRecord();
-        rec.avatarImage = dataUrl;
-        btn.innerHTML = avatarInnerHtml(rec, fallbackEmoji);
-        onChange(rec);
-        closeAvatarModal();
-        showToast('Фото добавлено');
-      });
+        const oldVideoId = rec.avatarVideoId;
+        saveAvatarVideo(file).then((mediaRec) => {
+          rec.avatarVideoId = mediaRec.id;
+          rec.avatarImage = null;
+          refreshBtn();
+          onChange(rec);
+          closeAvatarModal();
+          showToast(file.type.startsWith('video/') ? 'Видео добавлено' : 'GIF добавлен');
+          if (oldVideoId && oldVideoId !== mediaRec.id) deleteAvatarVideo(oldVideoId).catch(() => {});
+        }).catch(() => showToast('Не удалось сохранить файл'));
+      } else {
+        resizeImageFile(file, 1000, (dataUrl) => {
+          const rec = getRecord();
+          const oldVideoId = rec.avatarVideoId;
+          rec.avatarImage = dataUrl;
+          rec.avatarVideoId = null;
+          refreshBtn();
+          onChange(rec);
+          closeAvatarModal();
+          showToast('Фото добавлено');
+          if (oldVideoId) deleteAvatarVideo(oldVideoId).catch(() => {});
+        });
+      }
+      e.target.value = '';
     });
     const removeBtn = document.getElementById('removePhotoBtn');
     if (removeBtn) removeBtn.addEventListener('click', () => {
       const rec = getRecord();
+      const oldVideoId = rec.avatarVideoId;
       rec.avatarImage = null;
-      btn.innerHTML = avatarInnerHtml(rec, fallbackEmoji);
+      rec.avatarVideoId = null;
+      refreshBtn();
       onChange(rec);
       closeAvatarModal();
+      if (oldVideoId) deleteAvatarVideo(oldVideoId).catch(() => {});
     });
     document.querySelectorAll('.emoji-choice').forEach(b => {
       b.addEventListener('click', () => {
         const rec = getRecord();
+        const oldVideoId = rec.avatarVideoId;
         rec.avatar = b.dataset.e;
         rec.avatarImage = null;
-        btn.innerHTML = avatarInnerHtml(rec, fallbackEmoji);
+        rec.avatarVideoId = null;
+        refreshBtn();
         onChange(rec);
         closeAvatarModal();
+        if (oldVideoId) deleteAvatarVideo(oldVideoId).catch(() => {});
       });
     });
     document.getElementById('customEmojiConfirm').addEventListener('click', () => {
       const val = document.getElementById('customEmojiInput').value.trim();
       if (!val) return;
       const rec = getRecord();
+      const oldVideoId = rec.avatarVideoId;
       rec.avatar = val;
       rec.avatarImage = null;
-      btn.innerHTML = avatarInnerHtml(rec, fallbackEmoji);
+      rec.avatarVideoId = null;
+      refreshBtn();
       onChange(rec);
       closeAvatarModal();
+      if (oldVideoId) deleteAvatarVideo(oldVideoId).catch(() => {});
     });
   });
 }
 
 // эмодзи по умолчанию, если у записи ещё нет своего аватара
-function defaultBeastEmoji(type) {
-  const t = (type || '').toLowerCase();
+function defaultBeastEmoji(type, subtype) {
+  const t = ((type || '') + ' ' + (subtype || '')).toLowerCase();
   if (t.includes('дракон')) return '🐉';
   if (t.includes('зверь')) return '🐺';
   if (t.includes('нежит')) return '💀';
@@ -279,6 +379,11 @@ function defaultBeastEmoji(type) {
   if (t.includes('гуманоид')) return '🧑';
   if (t.includes('элементал')) return '🔥';
   return '❔';
+}
+// "Тип (подтип)" — как принято в D&D, например "Гуманоид (гоблиноид)"
+function formatCreatureType(b) {
+  if (!b || !b.type) return '';
+  return b.subtype ? `${b.type} (${b.subtype})` : b.type;
 }
 // Собственные нарисованные SVG-иконки для предметов, где обычный эмодзи выглядит невыразительно
 const CUSTOM_ITEM_ICONS = {
@@ -413,6 +518,7 @@ function renderCharList() {
     el.addEventListener('click', () => openCharacter(c.id));
     list.appendChild(el);
   });
+  hydrateAvatarVideos(list);
 }
 
 function migrateChar(c) {
@@ -455,6 +561,7 @@ function openCharacter(id) {
   document.getElementById('sheetName').value = c.name;
   document.getElementById('sheetName').style.color = c.nameColor || '';
   document.getElementById('sheetAvatar').innerHTML = avatarInnerHtml(c, '🧙');
+  hydrateAvatarVideos(document.getElementById('sheetAvatar'));
   renderCharColorSwatches(c);
   populateRaceClassOptions();
   document.getElementById('sheetRace').value = c.race;
@@ -1131,12 +1238,15 @@ function updateHpBar(c) {
 document.getElementById('backToList').addEventListener('click', () => switchView('characters'));
 document.getElementById('deleteCharBtn').addEventListener('click', () => {
   if (!confirm('Удалить этого персонажа безвозвратно?')) return;
+  const charToDelete = getChar(currentCharId);
+  const videoId = charToDelete && charToDelete.avatarVideoId;
   state.characters = state.characters.filter(c => c.id !== currentCharId);
   currentCharId = null;
   saveState();
   playChainClink();
   switchView('characters');
   renderCharList();
+  if (videoId) deleteAvatarVideo(videoId).catch(() => {});
 });
 
 // ==================== BESTIARY ====================
@@ -1156,6 +1266,16 @@ function renderBestiaryFilterChips() {
   wrap.innerHTML = types.map(t => `<button class="chip ${t === bestiaryFilter ? 'active' : ''}" data-t="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('');
   wrap.querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', () => { bestiaryFilter = chip.dataset.t; renderBestiary(); });
+  });
+
+  // Подтип (например, у "Гуманоид" бывают "гоблиноид", "орк" и т.п.) —
+  // отдельный фильтр, чтобы существа с общим типом, но разными подтипами,
+  // не путались друг с другом в списке "Тип".
+  const subtypes = ['Все', ...new Set(state.bestiary.map(b => b.subtype).filter(Boolean))];
+  const subtypeWrap = document.getElementById('bestiarySubtypeFilter');
+  subtypeWrap.innerHTML = subtypes.map(st => `<button class="chip ${st === bestiarySubtypeFilter ? 'active' : ''}" data-st="${escapeHtml(st)}">${escapeHtml(st)}</button>`).join('');
+  subtypeWrap.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => { bestiarySubtypeFilter = chip.dataset.st; renderBestiary(); });
   });
 
   const crWrap = document.getElementById('bestiaryCrFilter');
@@ -1190,6 +1310,7 @@ function renderBestiary() {
   const items = state.bestiary
     .filter(b =>
       (bestiaryFilter === 'Все' || b.type === bestiaryFilter) &&
+      (bestiarySubtypeFilter === 'Все' || b.subtype === bestiarySubtypeFilter) &&
       (bestiaryCrFilter === 'Все' || b.cr === bestiaryCrFilter) &&
       (bestiarySizeFilter === 'Все' || b.size === bestiarySizeFilter) &&
       (bestiaryHabitatFilter === 'Все' || (b.habitat || []).includes(bestiaryHabitatFilter))
@@ -1198,10 +1319,10 @@ function renderBestiary() {
   if (!items.length) { list.innerHTML = '<div class="empty-state">Ничего не найдено</div>'; return; }
   list.innerHTML = items.map(b => `
     <div class="list-item" data-id="${b.id}">
-      <div class="avatar-circle small">${avatarInnerHtml(b, defaultBeastEmoji(b.type))}</div>
+      <div class="avatar-circle small">${avatarInnerHtml(b, defaultBeastEmoji(b.type, b.subtype))}</div>
       <div style="flex:1">
         <div>${escapeHtml(b.name)} ${b.custom ? '★' : ''}</div>
-        <div class="meta">${escapeHtml(b.type)}${b.size ? ' · ' + escapeHtml(b.size) : ''} · КО ${escapeHtml(b.cr)} · КД ${b.ac} · ХП ${escapeHtml(String(b.hp))}</div>
+        <div class="meta">${escapeHtml(formatCreatureType(b))}${b.size ? ' · ' + escapeHtml(b.size) : ''} · КО ${escapeHtml(b.cr)} · КД ${b.ac} · ХП ${escapeHtml(String(b.hp))}</div>
       </div>
       <span class="badge">${b.flySpeed ? '🪽 ' : ''}${escapeHtml(b.speed)}</span>
     </div>
@@ -1209,6 +1330,7 @@ function renderBestiary() {
   list.querySelectorAll('.list-item').forEach(el => {
     el.addEventListener('click', () => openBestiaryDetail(el.dataset.id));
   });
+  hydrateAvatarVideos(list);
 }
 
 function openBestiaryDetail(id) {
@@ -1229,8 +1351,8 @@ function openBestiaryDetail(id) {
   if (b.swimSpeed) speedParts.push(`плавание ${escapeHtml(b.swimSpeed)}`);
   if (b.climbSpeed) speedParts.push(`лазанье ${escapeHtml(b.climbSpeed)}`);
   openModal(b.name, `
-    <div class="avatar-circle large" style="margin:0 auto 12px">${avatarInnerHtml(b, defaultBeastEmoji(b.type))}</div>
-    <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(b.type)}${b.size ? ' · ' + escapeHtml(b.size) : ''} · КО ${escapeHtml(b.cr)}</div>
+    <div class="avatar-circle large" style="margin:0 auto 12px">${avatarInnerHtml(b, defaultBeastEmoji(b.type, b.subtype))}</div>
+    <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(formatCreatureType(b))}${b.size ? ' · ' + escapeHtml(b.size) : ''} · КО ${escapeHtml(b.cr)}</div>
     ${b.habitat && b.habitat.length ? `<div class="meta" style="margin-bottom:8px;text-align:center">Обитание: ${escapeHtml(b.habitat.join(', '))}</div>` : ''}
     <div style="margin-bottom:8px">КД ${b.ac} · ХП ${escapeHtml(String(b.hp))}</div>
     <div style="margin-bottom:8px">Скорость: ${speedParts.join(', ')}</div>
@@ -1246,21 +1368,24 @@ function openBestiaryDetail(id) {
   document.querySelectorAll('[data-open-spell]').forEach(el => {
     el.addEventListener('click', () => openSpellDetail(el.dataset.openSpell, true));
   });
+  hydrateAvatarVideos();
   if (b.custom) {
     document.getElementById('editBeast').addEventListener('click', () => openBestiaryForm(b));
     document.getElementById('deleteBeast').addEventListener('click', () => {
       if (!confirm('Удалить это существо?')) return;
+      const videoId = b.avatarVideoId;
       state.bestiary = state.bestiary.filter(x => x.id !== b.id);
       saveState();
       playChainClink();
       closeModal();
       renderBestiary();
+      if (videoId) deleteAvatarVideo(videoId).catch(() => {});
     });
   }
 }
 
 function openBestiaryForm(existing) {
-  const b = existing || { id: uid('b'), name: '', type: '', cr: '', size: 'Средний', habitat: [], ac: 10, hp: '', speed: '30 фт', flySpeed: '', swimSpeed: '', climbSpeed: '', skills: '', perception: '', languages: '', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, actions: '', description: '', avatar: '', knownSpells: [], custom: true };
+  const b = existing || { id: uid('b'), name: '', type: '', subtype: '', cr: '', size: 'Средний', habitat: [], ac: 10, hp: '', speed: '30 фт', flySpeed: '', swimSpeed: '', climbSpeed: '', skills: '', perception: '', languages: '', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, actions: '', description: '', avatar: '', knownSpells: [], custom: true };
   if (!b.habitat) b.habitat = [];
   if (!b.knownSpells) b.knownSpells = [];
   if (b.flySpeed === undefined) b.flySpeed = '';
@@ -1269,12 +1394,16 @@ function openBestiaryForm(existing) {
   if (b.skills === undefined) b.skills = '';
   if (b.perception === undefined) b.perception = '';
   if (b.languages === undefined) b.languages = '';
+  if (b.subtype === undefined) b.subtype = '';
   const sizeOptions = CREATURE_SIZES.map(s => `<option ${s === b.size ? 'selected' : ''}>${s}</option>`).join('');
   const habitatChips = HABITATS.map(h => `<button type="button" class="chip ${b.habitat.includes(h) ? 'active' : ''}" data-h="${escapeHtml(h)}">${escapeHtml(h)}</button>`).join('');
   openModal(existing ? 'Редактировать существо' : 'Новое существо', `
-    <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('bAvatar', b, defaultBeastEmoji(b.type), true)}</div>
+    <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('bAvatar', b, defaultBeastEmoji(b.type, b.subtype), true)}</div>
     <label>Название</label><input id="bName" value="${escapeAttr(b.name)}">
-    <label>Тип</label><input id="bType" value="${escapeAttr(b.type)}" placeholder="Например, Гуманоид">
+    <div class="row">
+      <div><label>Тип</label><input id="bType" value="${escapeAttr(b.type)}" placeholder="Например, Гуманоид"></div>
+      <div><label>Подтип</label><input id="bSubtype" value="${escapeAttr(b.subtype)}" placeholder="Например, гоблиноид"></div>
+    </div>
     <div class="row">
       <div><label>Класс опасности</label><input id="bCr" value="${escapeAttr(b.cr)}" placeholder="1/4"></div>
       <div><label>КД</label><input id="bAc" type="number" value="${b.ac}"></div>
@@ -1313,7 +1442,8 @@ function openBestiaryForm(existing) {
     <button class="primary block" id="saveBeast">Сохранить</button>
   `);
   bindRichToolbars();
-  bindAvatarPicker('bAvatar', b, defaultBeastEmoji(b.type), () => {});
+  bindAvatarPicker('bAvatar', b, defaultBeastEmoji(b.type, b.subtype), () => {});
+  hydrateAvatarVideos();
   const selectedHabitats = new Set(b.habitat);
   document.getElementById('bHabitatChips').querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', () => {
@@ -1361,6 +1491,7 @@ function openBestiaryForm(existing) {
   document.getElementById('saveBeast').addEventListener('click', () => {
     b.name = document.getElementById('bName').value.trim() || 'Без имени';
     b.type = document.getElementById('bType').value.trim();
+    b.subtype = document.getElementById('bSubtype').value.trim();
     b.cr = document.getElementById('bCr').value.trim();
     b.ac = parseInt(document.getElementById('bAc').value) || 10;
     b.hp = document.getElementById('bHp').value.trim();
@@ -1373,7 +1504,7 @@ function openBestiaryForm(existing) {
     b.languages = document.getElementById('bLanguages').value.trim();
     b.size = document.getElementById('bSize').value;
     b.habitat = Array.from(selectedHabitats);
-    b.avatar = b.avatar || defaultBeastEmoji(document.getElementById('bType').value.trim());
+    b.avatar = b.avatar || defaultBeastEmoji(document.getElementById('bType').value.trim(), document.getElementById('bSubtype').value.trim());
     const nums = document.getElementById('bAbilities').value.trim().split(/\s+/).map(n => parseInt(n) || 10);
     const keys = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
     keys.forEach((k, i) => { b.abilities[k] = nums[i] !== undefined ? nums[i] : 10; });
@@ -1630,6 +1761,7 @@ function renderItems() {
   list.querySelectorAll('.list-item').forEach(el => {
     el.addEventListener('click', () => openItemDetail(el.dataset.id));
   });
+  hydrateAvatarVideos(list);
 }
 
 function armorSlotDescription(it) {
@@ -1653,15 +1785,18 @@ function openItemDetail(id) {
     <div style="white-space:pre-wrap">${escapeHtml(it.properties || '')}</div>
     ${editBtn}
   `);
+  hydrateAvatarVideos();
   if (it.custom) {
     document.getElementById('editItem').addEventListener('click', () => openItemForm(it));
     document.getElementById('deleteItem').addEventListener('click', () => {
       if (!confirm('Удалить этот предмет?')) return;
+      const videoId = it.avatarVideoId;
       state.items = state.items.filter(x => x.id !== it.id);
       saveState();
       playChainClink();
       closeModal();
       renderItems();
+      if (videoId) deleteAvatarVideo(videoId).catch(() => {});
     });
   }
 }
@@ -1698,6 +1833,7 @@ function openItemForm(existing) {
     <button class="primary block" id="saveItem">Сохранить</button>
   `);
   bindAvatarPicker('itAvatar', it, defaultItemEmoji(it.name, it.type), () => {});
+  hydrateAvatarVideos();
   document.getElementById('itArmorSlot').addEventListener('change', (e) => {
     const v = e.target.value;
     document.getElementById('itArmorBaseRow').style.display = (v === 'light' || v === 'medium' || v === 'heavy') ? 'flex' : 'none';
