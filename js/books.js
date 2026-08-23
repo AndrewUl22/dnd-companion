@@ -53,12 +53,17 @@ function deleteBookById(id) {
   }));
 }
 
-// Видео-аватарки существ — тоже слишком тяжёлые для localStorage.
-// В самой карточке существа хранится только id (record.avatarVideoId),
-// сам файл лежит здесь.
-function saveAvatarVideo(file) {
-  const id = 'vid_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-  const record = { id, mime: file.type, size: file.size, addedAt: Date.now(), blob: file };
+// Видео- и GIF-аватарки — тоже слишком тяжёлые/хрупкие для localStorage
+// (Canvas убивает анимацию GIF, а localStorage слишком мал для видео).
+// В самой карточке (персонажа/существа/предмета) хранится только id
+// (record.avatarMediaId), сам файл лежит здесь как Blob.
+// Название стора (avatarVideos) осталось от первой версии этой функции,
+// когда она умела только видео — сейчас он используется и под GIF тоже,
+// переименовывать не стали, чтобы не терять уже сохранённые у людей данные.
+function saveAvatarMedia(file) {
+  const id = 'media_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const kind = file.type.startsWith('video/') ? 'video' : 'gif';
+  const record = { id, mime: file.type, kind, size: file.size, addedAt: Date.now(), blob: file };
   return openBooksDB().then((db) => new Promise((resolve, reject) => {
     const tx = db.transaction(AVATAR_VIDEOS_STORE, 'readwrite');
     tx.objectStore(AVATAR_VIDEOS_STORE).put(record);
@@ -67,7 +72,7 @@ function saveAvatarVideo(file) {
   }));
 }
 
-function getAvatarVideo(id) {
+function getAvatarMedia(id) {
   return openBooksDB().then((db) => new Promise((resolve, reject) => {
     const tx = db.transaction(AVATAR_VIDEOS_STORE, 'readonly');
     const req = tx.objectStore(AVATAR_VIDEOS_STORE).get(id);
@@ -76,7 +81,7 @@ function getAvatarVideo(id) {
   }));
 }
 
-function deleteAvatarVideo(id) {
+function deleteAvatarMedia(id) {
   return openBooksDB().then((db) => new Promise((resolve, reject) => {
     const tx = db.transaction(AVATAR_VIDEOS_STORE, 'readwrite');
     tx.objectStore(AVATAR_VIDEOS_STORE).delete(id);
