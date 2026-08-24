@@ -67,12 +67,17 @@ function fmtMod(m) {
   return (m >= 0 ? '+' : '') + m;
 }
 
-function showToast(msg) {
+// type: 'success' (по умолчанию) — короткий перезвон; 'error' — тихий
+// низкий сигнал; 'info' — без звука (для промежуточных статусов вроде
+// "Загружаем книгу…", чтобы не звенеть на каждый шаг долгой операции)
+function showToast(msg, type) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(showToast._timer);
   showToast._timer = setTimeout(() => t.classList.remove('show'), 1800);
+  if (type === 'error') playErrorTone();
+  else if (type !== 'info') playSuccessChime();
 }
 
 // Быстрый бросок из листа персонажа (клик по навыку/спасброску/атаке) —
@@ -145,7 +150,18 @@ function switchSheetTab(tab) {
   document.querySelectorAll('.sheet-tab-panel').forEach(p => p.classList.toggle('active', p.dataset.tabPanel === tab));
 }
 document.querySelectorAll('.sheet-tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => { switchSheetTab(btn.dataset.tab); playFormatClick(); });
+  btn.addEventListener('click', () => switchSheetTab(btn.dataset.tab));
+});
+
+// Единый лёгкий "тик" на любые чипы (фильтры, выбор темы, скины костей),
+// вкладки листа/навигации, экипировку и разворачивание полей — вместо
+// того чтобы вписывать playSoftTap() в каждый обработчик по отдельности.
+// Чекбоксы (владения, снаряжение, вдохновение и т.п.) — тем же тиком по 'change'.
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.chip, .equip-btn, .sheet-tab-btn, .emoji-choice, .avatar-circle, nav.tabbar button, .expand-btn')) playSoftTap();
+});
+document.addEventListener('change', (e) => {
+  if (e.target.tagName === 'INPUT' && e.target.type === 'checkbox') playSoftTap();
 });
 
 document.getElementById('settingsBtn').addEventListener('click', () => switchView('settings'));
@@ -347,7 +363,7 @@ function bindAvatarPicker(btnId, recordOrGetter, fallbackEmoji, onChange) {
       if (isAnimated) {
         // Видео и GIF — напрямую как Blob в IndexedDB, без Canvas (не портим анимацию/качество)
         if (file.size > AVATAR_MEDIA_MAX_BYTES) {
-          showToast('Файл слишком большой (максимум 30 МБ)');
+          showToast('Файл слишком большой (максимум 30 МБ)', 'error');
           return;
         }
         const rec = getRecord();
@@ -360,7 +376,7 @@ function bindAvatarPicker(btnId, recordOrGetter, fallbackEmoji, onChange) {
           closeAvatarModal();
           showToast(file.type.startsWith('video/') ? 'Видео добавлено' : 'Анимация добавлена');
           if (oldMediaId && oldMediaId !== mediaRec.id) deleteAvatarMedia(oldMediaId).catch(() => {});
-        }).catch(() => showToast('Не удалось сохранить файл'));
+        }).catch(() => showToast('Не удалось сохранить файл', 'error'));
         return;
       }
       // Статичные изображения — через Canvas, с качественным сглаживанием
@@ -539,6 +555,7 @@ function openCharacterForm() {
     const c = newCharacter(name);
     state.characters.push(c);
     saveState();
+    playSuccessChime();
     closeModal();
     openCharacter(c.id);
   });
@@ -1256,12 +1273,12 @@ function bindRichToolbars() {
     bar.querySelector('.anchor-btn').addEventListener('click', () => {
       const sel = window.getSelection();
       if (sel.isCollapsed) {
-        showToast('Сначала выделите текст — например, название умения');
+        showToast('Сначала выделите текст — например, название умения', 'error');
         return;
       }
       target.focus();
       const text = sel.toString();
-      if (!text.trim()) { showToast('Сначала выделите текст — например, название умения'); return; }
+      if (!text.trim()) { showToast('Сначала выделите текст — например, название умения', 'error'); return; }
       // добавляем невидимый пробел после метки, иначе курсор "застревает" внутри
       // подсвеченного span и весь следующий набранный текст тоже выглядит как метка
       document.execCommand('insertHTML', false, `<span class="text-anchor">${escapeHtml(text)}</span>&nbsp;`);
@@ -1271,7 +1288,7 @@ function bindRichToolbars() {
     });
     bar.querySelector('.jump-btn').addEventListener('click', () => {
       const anchors = Array.from(target.querySelectorAll('.text-anchor'));
-      if (!anchors.length) { showToast('Пока нет меток — выделите текст и нажмите #'); return; }
+      if (!anchors.length) { showToast('Пока нет меток — выделите текст и нажмите #', 'error'); return; }
       const items = anchors.map(el => ({ el, text: el.textContent }));
       openListPicker(false, 'Перейти к метке', items,
         (item) => `<div style="flex:1">${escapeHtml(item.text)}</div>`,
@@ -2151,7 +2168,7 @@ function openBookViewer(id, books) {
   const book = books.find(b => b.id === id);
   if (!book) return;
   if (typeof pdfjsLib === 'undefined') {
-    showToast('Не удалось загрузить модуль чтения PDF — проверьте подключение к интернету при первом открытии книги');
+    showToast('Не удалось загрузить модуль чтения PDF — проверьте подключение к интернету при первом открытии книги', 'error');
     return;
   }
   document.getElementById('pdfViewerTitle').textContent = book.name;
@@ -2234,14 +2251,14 @@ document.getElementById('addBookBtn').addEventListener('click', () => {
 document.getElementById('bookFileInput').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  if (file.type !== 'application/pdf') { showToast('Нужен файл в формате PDF'); return; }
-  showToast('Загружаем книгу…');
+  if (file.type !== 'application/pdf') { showToast('Нужен файл в формате PDF', 'error'); return; }
+  showToast('Загружаем книгу…', 'info');
   addBookFile(file).then(() => {
     playPageTurn();
     showToast('Книга добавлена');
     renderBooks();
   }).catch(() => {
-    showToast('Не удалось сохранить файл — возможно, не хватает места');
+    showToast('Не удалось сохранить файл — возможно, не хватает места', 'error');
   });
   e.target.value = '';
 });
