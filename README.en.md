@@ -1,5 +1,7 @@
 # DnD Companion — web app (PWA)
 
+**Русская версия: [README.md](README.md)**
+
 A fully working app: character sheets, bestiary, items, custom content,
 import/export. Opens in your phone's browser and installs on Android like
 a regular app (home screen icon, works offline).
