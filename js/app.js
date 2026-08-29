@@ -44,6 +44,7 @@ applyTheme();
 let currentCharId = null;
 let activeView = 'characters';
 let bestiaryFilter = 'Все';
+let bestiarySubtypeFilter = 'Все';
 let bestiaryCrFilter = 'Все';
 let bestiarySizeFilter = 'Все';
 let bestiaryHabitatFilter = 'Все';
@@ -1388,8 +1389,32 @@ function renderBestiaryFilterChips() {
   const wrap = document.getElementById('bestiaryFilter');
   wrap.innerHTML = types.map(t => `<button class="chip ${t === bestiaryFilter ? 'active' : ''}" data-t="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('');
   wrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { bestiaryFilter = chip.dataset.t; renderBestiary(); });
+    chip.addEventListener('click', () => {
+      bestiaryFilter = chip.dataset.t;
+      bestiarySubtypeFilter = 'Все'; // при смене типа список подтипов меняется, старый выбор может уже не подходить
+      renderBestiary();
+    });
   });
+
+  // Подтип зависит от выбранного типа — считаем список только по уже
+  // отфильтрованным по типу существам, чтобы не показывать подтипы,
+  // которых у этого типа не бывает
+  const subtypeTitle = document.getElementById('bestiarySubtypeTitle');
+  const subWrap = document.getElementById('bestiarySubtypeFilter');
+  const relevantForSub = state.bestiary.filter(b => bestiaryFilter === 'Все' || b.type === bestiaryFilter);
+  const subValues = ['Все', ...new Set(relevantForSub.map(b => b.subtype).filter(Boolean))];
+  if (subValues.length > 1) {
+    subtypeTitle.style.display = '';
+    subWrap.style.display = '';
+    subWrap.innerHTML = subValues.map(st => `<button class="chip ${st === bestiarySubtypeFilter ? 'active' : ''}" data-st="${escapeHtml(st)}">${escapeHtml(st)}</button>`).join('');
+    subWrap.querySelectorAll('.chip').forEach(chip => {
+      chip.addEventListener('click', () => { bestiarySubtypeFilter = chip.dataset.st; renderBestiary(); });
+    });
+  } else {
+    subtypeTitle.style.display = 'none';
+    subWrap.style.display = 'none';
+    bestiarySubtypeFilter = 'Все';
+  }
 
   const crWrap = document.getElementById('bestiaryCrFilter');
   const crValues = ['Все', ...new Set(state.bestiary.map(b => b.cr).filter(Boolean))].sort((a, b) => {
@@ -1423,6 +1448,7 @@ function renderBestiary() {
   const items = state.bestiary
     .filter(b =>
       (bestiaryFilter === 'Все' || b.type === bestiaryFilter) &&
+      (bestiarySubtypeFilter === 'Все' || b.subtype === bestiarySubtypeFilter) &&
       (bestiaryCrFilter === 'Все' || b.cr === bestiaryCrFilter) &&
       (bestiarySizeFilter === 'Все' || b.size === bestiarySizeFilter) &&
       (bestiaryHabitatFilter === 'Все' || (b.habitat || []).includes(bestiaryHabitatFilter))
