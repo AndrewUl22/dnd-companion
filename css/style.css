@@ -740,87 +740,12 @@ button.block { width: 100%; margin-bottom: 8px; }
   box-shadow: 0 0 0 2px var(--accent-soft);
   background: linear-gradient(90deg, var(--accent-soft), var(--card));
 }
-.battle-hp-value {
-  min-width: 46px;
+.battle-hp-input {
+  width: 46px;
   text-align: center;
-  padding: 4px 8px;
+  padding: 4px 2px;
   margin: 0;
-  background: var(--bg-elevated);
-  border: 1px solid var(--card-border);
-  border-radius: 6px;
-  color: var(--text);
-  font-weight: 700;
-  font-size: 14px;
-  cursor: pointer;
 }
-.battle-hp-value:hover { border-color: var(--accent); color: var(--accent); }
-
-.hp-adjust-row { display: flex; gap: 8px; margin-top: 10px; }
-.hp-adjust-row button { flex: 1; }
-.hp-adjust-current { text-align: center; font-size: 13px; color: var(--text-dim); margin-bottom: 4px; }
-.hp-adjust-current b { color: var(--text); font-size: 16px; }
-
-/* ==== Вкладки листа персонажа ==== */
-.sheet-tabs {
-  display: flex;
-  gap: 6px;
-  margin: 14px 0 12px;
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: var(--bg);
-  padding: 8px 0;
-}
-.sheet-tab-btn {
-  flex: 1;
-  background: var(--bg-elevated);
-  border: 1px solid var(--card-border);
-  color: var(--text-dim);
-  border-radius: 10px;
-  padding: 9px 4px;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.sheet-tab-btn.active {
-  background: var(--accent);
-  color: #1b1530;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-soft), 0 2px 8px #0004;
-}
-.sheet-tab-panel { display: none; }
-.sheet-tab-panel.active { display: block; animation: sheetTabIn .22s ease; }
-@keyframes sheetTabIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* ==== Всплывающий результат броска (клик по навыку/спасброску/атаке) ==== */
-.roll-toast {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%) scale(0.85);
-  background: var(--card);
-  border: 2px solid var(--accent);
-  border-radius: 16px;
-  padding: 16px 26px;
-  text-align: center;
-  z-index: 60;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity .18s, transform .18s;
-  box-shadow: 0 8px 30px #000a;
-  min-width: 160px;
-}
-.roll-toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-.roll-toast-label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-.roll-toast-total { font-family: 'Cinzel', serif; font-size: 40px; font-weight: 800; color: var(--accent); line-height: 1; }
-.roll-toast-breakdown { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
-.roll-toast.crit { border-color: #e0b13f; }
-.roll-toast.crit .roll-toast-total { color: #e0b13f; }
-.roll-toast.fail { border-color: var(--danger); }
-.roll-toast.fail .roll-toast-total { color: var(--danger); }
 
 .avatar-circle {
   width: 72px; height: 72px;
@@ -1105,20 +1030,24 @@ button.block { width: 100%; margin-bottom: 8px; }
   width: 100%; height: 100%;
   border-radius: inherit;
   object-fit: cover;
+  image-rendering: -webkit-optimize-contrast;
 }
 .avatar-circle.small img { width: 100%; height: 100%; }
 .avatar-circle svg { width: 60%; height: 60%; }
-.avatar-media-slot {
+.avatar-video-slot {
   display: block;
   width: 100%; height: 100%;
   border-radius: inherit;
   overflow: hidden;
 }
-.avatar-media-slot video, .avatar-media-slot img {
+/* Единый стиль для видео (mp4/webm) и GIF/картинок, сохранённых напрямую как Blob */
+.avatar-video-slot video,
+.avatar-video-slot img {
   width: 100%; height: 100%;
   border-radius: inherit;
   object-fit: cover;
   display: block;
+  image-rendering: -webkit-optimize-contrast;
 }
 
 .expanded-editor-textarea {

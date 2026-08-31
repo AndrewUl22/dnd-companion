@@ -37,7 +37,8 @@ const DEFAULT_BESTIARY = [
   {
     id: "b_goblin",
     name: "Гоблин",
-    type: "Гуманоид (гоблиноид)",
+    type: "Гуманоид",
+    subtype: "гоблиноид",
     cr: "1/4",
     size: "Маленький",
     habitat: ["Лес", "Подземье", "Холмы"],
@@ -67,7 +68,8 @@ const DEFAULT_BESTIARY = [
   {
     id: "b_orc",
     name: "Орк",
-    type: "Гуманоид (орк)",
+    type: "Гуманоид",
+    subtype: "орк",
     cr: "1/2",
     size: "Средний",
     habitat: ["Горы", "Холмы", "Равнина"],
@@ -147,12 +149,12 @@ const ARMOR_SLOTS = [
 ];
 
 const DEFAULT_ITEMS = [
-  { id: "i_longsword", name: "Длинный меч", type: "Оружие", weight: "1.5 кг", cost: "15 зм", properties: "1к8 рубящего урона, универсальное (1к10)", armorSlot: "none", armorBaseAC: 0, acBonus: 0, atkBonus: 0, rarity: "Обычный", custom: false },
-  { id: "i_chainmail", name: "Кольчуга", type: "Броня (тяжёлая)", weight: "27 кг", cost: "75 зм", properties: "Требует Силу 13, ограничивает скорость", armorSlot: "heavy", armorBaseAC: 16, acBonus: 0, atkBonus: 0, rarity: "Обычный", custom: false },
-  { id: "i_shield", name: "Щит", type: "Броня", weight: "3 кг", cost: "10 зм", properties: "Пока щит в руке, КД увеличивается на 2", armorSlot: "flat", armorBaseAC: 0, acBonus: 2, atkBonus: 0, rarity: "Обычный", custom: false },
-  { id: "i_leather", name: "Кожаная броня", type: "Броня (лёгкая)", weight: "5 кг", cost: "10 зм", properties: "Даёт защиту 11 + модификатор Ловкости", armorSlot: "light", armorBaseAC: 11, acBonus: 0, atkBonus: 0, rarity: "Обычный", custom: false },
-  { id: "i_healing_potion", name: "Зелье лечения", type: "Снаряжение", weight: "0.25 кг", cost: "50 зм", properties: "Восстанавливает 2к4+2 хитов", armorSlot: "none", armorBaseAC: 0, acBonus: 0, atkBonus: 0, rarity: "Необычный", custom: false },
-  { id: "i_rope", name: "Верёвка (15 м)", type: "Снаряжение", weight: "5 кг", cost: "1 зм", properties: "Прочная пеньковая верёвка", armorSlot: "none", armorBaseAC: 0, acBonus: 0, atkBonus: 0, rarity: "Обычный", custom: false }
+  { id: "i_longsword", name: "Длинный меч", type: "Оружие", subtype: "", weight: "1.5 кг", cost: "15 зм", properties: "1к8 рубящего урона, универсальное (1к10)", armorSlot: "none", armorBaseAC: 0, acBonus: 0, atkBonus: 0, rarity: "Обычный", custom: false },
+  { id: "i_chainmail", name: "Кольчуга", type: "Броня", subtype: "тяжёлая", weight: "27 кг", cost: "75 зм", properties: "Требует Силу 13, ограничивает скорость", armorSlot: "heavy", armorBaseAC: 16, acBonus: 0, atkBonus: 0, rarity: "Обычный", custom: false },
+  { id: "i_shield", name: "Щит", type: "Броня", subtype: "", weight: "3 кг", cost: "10 зм", properties: "Пока щит в руке, КД увеличивается на 2", armorSlot: "flat", armorBaseAC: 0, acBonus: 2, atkBonus: 0, rarity: "Обычный", custom: false },
+  { id: "i_leather", name: "Кожаная броня", type: "Броня", subtype: "лёгкая", weight: "5 кг", cost: "10 зм", properties: "Даёт защиту 11 + модификатор Ловкости", armorSlot: "light", armorBaseAC: 11, acBonus: 0, atkBonus: 0, rarity: "Обычный", custom: false },
+  { id: "i_healing_potion", name: "Зелье лечения", type: "Снаряжение", subtype: "", weight: "0.25 кг", cost: "50 зм", properties: "Восстанавливает 2к4+2 хитов", armorSlot: "none", armorBaseAC: 0, acBonus: 0, atkBonus: 0, rarity: "Необычный", custom: false },
+  { id: "i_rope", name: "Верёвка (15 м)", type: "Снаряжение", subtype: "", weight: "5 кг", cost: "1 зм", properties: "Прочная пеньковая верёвка", armorSlot: "none", armorBaseAC: 0, acBonus: 0, atkBonus: 0, rarity: "Обычный", custom: false }
 ];
 
 // Палитра эмодзи для выбора аватара персонажа/существа/предмета

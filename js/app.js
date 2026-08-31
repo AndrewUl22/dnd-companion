@@ -30,11 +30,6 @@ if (!state.battle) state.battle = { combatants: [], currentIndex: 0, round: 1 };
 if (!state.settings) state.settings = { theme: 'dark', soundEnabled: true, diceSkin: 'ruby' };
 if (!state.settings.diceSkin) state.settings.diceSkin = 'ruby';
 if (state.settings.theme === 'coffee') state.settings.theme = 'undead'; // миграция: тему переименовали в "Нежить"
-// миграция: поле avatarVideoId у существ переименовано в avatarMediaId (тот же файл в IndexedDB, ссылка не меняется)
-if (state.bestiary) state.bestiary.forEach(b => {
-  if (b.avatarVideoId && !b.avatarMediaId) { b.avatarMediaId = b.avatarVideoId; }
-  delete b.avatarVideoId;
-});
 
 function applyTheme() {
   document.body.setAttribute('data-theme', state.settings.theme || 'dark');
@@ -48,8 +43,11 @@ let bestiarySubtypeFilter = 'Все';
 let bestiaryCrFilter = 'Все';
 let bestiarySizeFilter = 'Все';
 let bestiaryHabitatFilter = 'Все';
+let bestiarySearchQuery = '';
 let itemsFilter = 'Все';
+let itemsSubtypeFilter = 'Все';
 let itemsRarityFilter = 'Все';
+let itemsSearchQuery = '';
 let spellLevelFilter = 'Все';
 let spellClassFilter = 'Все';
 let spellSchoolFilter = 'Все';
@@ -68,53 +66,12 @@ function fmtMod(m) {
   return (m >= 0 ? '+' : '') + m;
 }
 
-// type: 'success' (по умолчанию) — короткий перезвон; 'error' — тихий
-// низкий сигнал; 'info' — без звука (для промежуточных статусов вроде
-// "Загружаем книгу…", чтобы не звенеть на каждый шаг долгой операции)
-function showToast(msg, type) {
+function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(showToast._timer);
   showToast._timer = setTimeout(() => t.classList.remove('show'), 1800);
-  if (type === 'error') playErrorTone();
-  else if (type !== 'info') playSuccessChime();
-}
-
-// Быстрый бросок из листа персонажа (клик по навыку/спасброску/атаке) —
-// показывает результат во всплывающей карточке по центру экрана и кладёт
-// запись в общую историю бросков дайсроллера (diceHistory, см. ниже).
-// sides передаём только для d20-бросков (навыки/спасброски/попадание) —
-// по нему определяется подсветка критического успеха/провала.
-function showRollToast(label, rolls, modifier, sides) {
-  const total = rolls.reduce((a, b) => a + b, 0) + modifier;
-  const breakdown = (rolls.length > 1 ? '[' + rolls.join('+') + ']' : String(rolls[0])) + (modifier ? (modifier > 0 ? '+' + modifier : modifier) : '');
-  const el = document.getElementById('rollToast');
-  const isCrit = sides === 20 && rolls.length === 1 && rolls[0] === 20;
-  const isFail = sides === 20 && rolls.length === 1 && rolls[0] === 1;
-  el.innerHTML = `<div class="roll-toast-label">${escapeHtml(label)}</div><div class="roll-toast-total">${total}</div><div class="roll-toast-breakdown">${escapeHtml(breakdown)}</div>`;
-  el.classList.remove('crit', 'fail');
-  if (isCrit) el.classList.add('crit');
-  if (isFail) el.classList.add('fail');
-  el.classList.add('show');
-  clearTimeout(showRollToast._timer);
-  showRollToast._timer = setTimeout(() => el.classList.remove('show'), 2200);
-  playDiceRoll();
-  diceHistory.unshift({ label, total, rolls, mod: modifier });
-}
-// Достаёт из строки урона вида "1к8+3 рубящего" количество, тип кости и
-// модификатор — чтобы можно было бросить эту кость по клику на атаку.
-// Возвращает null, если в строке не нашлось распознаваемой записи кости.
-function parseDiceNotation(str) {
-  if (!str) return null;
-  const m = String(str).match(/(\d+)\s*[dDкК]\s*(\d+)/);
-  if (!m) return null;
-  const count = parseInt(m[1]), sides = parseInt(m[2]);
-  if (!count || !sides) return null;
-  const rest = String(str).slice(m.index + m[0].length);
-  const modMatch = rest.match(/^\s*([+-]\s*\d+)/);
-  const modifier = modMatch ? parseInt(modMatch[1].replace(/\s+/g, '')) : 0;
-  return { count, sides, modifier };
 }
 
 // ==================== NAVIGATION ====================
@@ -143,26 +100,6 @@ function switchView(view) {
 
 document.querySelectorAll('nav.tabbar button').forEach(btn => {
   btn.addEventListener('click', () => switchView(btn.dataset.view));
-});
-
-// ==================== SHEET TABS ====================
-function switchSheetTab(tab) {
-  document.querySelectorAll('.sheet-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-  document.querySelectorAll('.sheet-tab-panel').forEach(p => p.classList.toggle('active', p.dataset.tabPanel === tab));
-}
-document.querySelectorAll('.sheet-tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => switchSheetTab(btn.dataset.tab));
-});
-
-// Единый лёгкий "тик" на любые чипы (фильтры, выбор темы, скины костей),
-// вкладки листа/навигации, экипировку и разворачивание полей — вместо
-// того чтобы вписывать playSoftTap() в каждый обработчик по отдельности.
-// Чекбоксы (владения, снаряжение, вдохновение и т.п.) — тем же тиком по 'change'.
-document.addEventListener('click', (e) => {
-  if (e.target.closest('.chip, .equip-btn, .sheet-tab-btn, .emoji-choice, .avatar-circle, nav.tabbar button, .expand-btn')) playSoftTap();
-});
-document.addEventListener('change', (e) => {
-  if (e.target.tagName === 'INPUT' && e.target.type === 'checkbox') playSoftTap();
 });
 
 document.getElementById('settingsBtn').addEventListener('click', () => switchView('settings'));
@@ -247,59 +184,55 @@ function openListPicker(useAux, title, items, rowHtmlFn, onPick, searchFn) {
 }
 
 // ==================== AVATAR PICKER ====================
-// Аватар может быть эмодзи (record.avatar), статичной картинкой
-// (record.avatarImage, сжатый dataURL) или видео/GIF-анимацией
-// (record.avatarMediaId — ссылка на Blob в IndexedDB, см. books.js:
-// saveAvatarMedia/getAvatarMedia). Видео и GIF не прогоняются через Canvas
-// (это убило бы анимацию у GIF и качество у видео) и не хранятся в самой
-// записи — localStorage для этого мал, поэтому рендерятся в два шага:
-// сразу выводится заглушка с data-media-id, а затем hydrateAvatarMedia()
-// асинхронно подставляет туда <video> или анимированный <img>.
-// Приоритет: видео/GIF > картинка > эмодзи.
+// Аватар может быть эмодзи (record.avatar), загруженной статичной картинкой,
+// прогнанной через Canvas (record.avatarImage, dataURL), или "сырым" медиа —
+// видео (mp4/webm) либо GIF-анимацией — сохранённым БЕЗ прогона через Canvas
+// как Blob в IndexedDB (record.avatarVideoId — ссылка на запись, см.
+// books.js: saveAvatarVideo/getAvatarVideo; поле хранит id как для видео,
+// так и для GIF — сам тип определяется по record.mime при отображении).
+// Blob не хранится в самой записи (localStorage слишком мал для этого),
+// поэтому рендерится в два шага: сразу выводится заглушка с data-video-id,
+// а затем hydrateAvatarVideos() асинхронно подставляет туда <video> или <img>
+// в зависимости от MIME-типа сохранённого файла.
+// Приоритет: видео/GIF > статичная картинка > эмодзи.
+// Используется одинаково везде: персонажи, бестиарий, предметы — единая логика.
 function avatarInnerHtml(record, fallbackEmoji) {
-  if (record && record.avatarMediaId) {
-    return `<span class="avatar-media-slot" data-media-id="${escapeAttr(record.avatarMediaId)}">${avatarInnerHtml({ avatarImage: record.avatarImage, avatar: record.avatar }, fallbackEmoji)}</span>`;
+  if (record && record.avatarVideoId) {
+    return `<span class="avatar-video-slot" data-video-id="${escapeAttr(record.avatarVideoId)}">${avatarInnerHtml({ avatarImage: record.avatarImage, avatar: record.avatar }, fallbackEmoji)}</span>`;
   }
-  if (record && record.avatarImage) return `<img src="${record.avatarImage}" alt="" style="image-rendering:-webkit-optimize-contrast">`;
+  if (record && record.avatarImage) return `<img src="${record.avatarImage}" alt="">`;
   const val = (record && record.avatar) || fallbackEmoji || '🧙';
   // Собственные сгенерированные SVG-иконки (CUSTOM_ITEM_ICONS) не экранируем — это не пользовательский ввод
   if (typeof val === 'string' && val.trim().startsWith('<svg')) return val;
   return escapeHtml(val);
 }
-// Находит все ещё не гидрированные медиа-заглушки внутри container (по
-// умолчанию — весь документ) и асинхронно подставляет в них <video> (для
-// видео) или <img> (для GIF, чтобы сохранить анимацию), доставая blob из
-// IndexedDB. Вызывается после любого рендера, который мог вывести аватар
-// с видео/GIF (списки, карточки, формы — персонажи, существа, предметы).
-function hydrateAvatarMedia(container) {
+// Находит все ещё не гидрированные видео-заглушки внутри container (по
+// умолчанию — весь документ) и асинхронно подставляет в них <video>,
+// доставая blob из IndexedDB. Вызывается после любого рендера, который мог
+// вывести аватар с видео (список бестиария, карточка существа, форма).
+function hydrateAvatarVideos(container) {
   const root = container || document;
-  const slots = root.querySelectorAll ? root.querySelectorAll('.avatar-media-slot[data-media-id]') : [];
+  const slots = root.querySelectorAll ? root.querySelectorAll('.avatar-video-slot[data-video-id]') : [];
   slots.forEach((slot) => {
-    const id = slot.dataset.mediaId;
-    getAvatarMedia(id).then((rec) => {
+    const id = slot.dataset.videoId;
+    getAvatarVideo(id).then((rec) => {
       if (!rec || !rec.blob) return;
       const url = URL.createObjectURL(rec.blob);
-      const isVideo = rec.kind === 'video' || (!rec.kind && rec.mime && rec.mime.startsWith('video/'));
+      const isVideo = !!(rec.mime && rec.mime.startsWith('video/'));
       slot.innerHTML = '';
       if (isVideo) {
         const video = document.createElement('video');
         video.src = url;
-        video.muted = true;
         video.autoplay = true;
         video.loop = true;
+        video.muted = true;
         video.playsInline = true;
-        video.style.width = '100%';
-        video.style.height = '100%';
-        video.style.objectFit = 'cover';
         slot.appendChild(video);
       } else {
+        // GIF (или другая анимация), сохранённая напрямую как Blob без прогона через Canvas
         const img = document.createElement('img');
         img.src = url;
         img.alt = '';
-        img.style.width = '100%';
-        img.style.height = '100%';
-        img.style.objectFit = 'cover';
-        img.style.imageRendering = '-webkit-optimize-contrast';
         slot.appendChild(img);
       }
     }).catch(() => { /* медиафайл не найден — оставляем заглушку (эмодзи/фото) */ });
@@ -308,10 +241,11 @@ function hydrateAvatarMedia(container) {
 function avatarPickerHtml(id, record, fallbackEmoji, large) {
   return `<button type="button" class="avatar-circle${large ? ' large' : ''}" id="${id}">${avatarInnerHtml(record, fallbackEmoji)}</button>`;
 }
-// Статичные картинки (jpg/png/webp) — единственный тип, который проходит
-// через Canvas: масштабируем до maxDim по большей стороне с качественным
-// сглаживанием, чтобы не размывало на экранах с высоким разрешением.
-function resizeImageFile(file, maxDim, quality, cb) {
+// Масштабирует СТАТИЧНОЕ изображение (JPG/PNG/WebP и т.п.) через Canvas:
+// по большей стороне до maxDim, с качественным сглаживанием, чтобы картинка
+// не "замыливалась" на экранах с высоким разрешением (retina и т.п.).
+// Видео и GIF сюда не попадают — см. bindAvatarPicker ниже (saveAvatarVideo).
+function resizeImageFile(file, maxDim, cb) {
   const reader = new FileReader();
   reader.onload = (e) => {
     const img = new Image();
@@ -325,118 +259,122 @@ function resizeImageFile(file, maxDim, quality, cb) {
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(img, 0, 0, w, h);
-      cb(canvas.toDataURL('image/jpeg', quality));
+      cb(canvas.toDataURL('image/jpeg', 0.90));
     };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
-const AVATAR_MAX_DIM = 1000;
-const AVATAR_JPEG_QUALITY = 0.90;
-const AVATAR_MEDIA_MAX_BYTES = 30 * 1024 * 1024; // 30 МБ — лимит для видео/GIF в IndexedDB
-function bindAvatarPicker(btnId, recordOrGetter, fallbackEmoji, onChange) {
+// Единая точка загрузки медиа для аватарок ЛЮБОЙ сущности (персонажи,
+// существа/бестиарий, предметы/инвентарь). Принимает картинки (в т.ч. GIF)
+// и видео (MP4/WebM) через один input с accept="image/*,video/mp4,video/webm".
+// Умно определяет тип по file.type:
+// - видео (video/mp4, video/webm, вообще любой video/*) или GIF-анимация
+//   (image/gif) сохраняются НАПРЯМУЮ как Blob в IndexedDB, без прогона через
+//   Canvas — иначе анимация и качество ломаются;
+// - обычные статичные изображения (JPG/PNG/WebP) идут через Canvas
+//   (resizeImageFile) — масштабируются и пережимаются в JPEG.
+function bindAvatarPicker(btnId, recordOrGetter, fallbackEmoji, onChange, opts) {
   const btn = document.getElementById(btnId);
   const getRecord = () => (typeof recordOrGetter === 'function') ? recordOrGetter() : recordOrGetter;
   const refreshBtn = () => {
     const rec = getRecord();
     btn.innerHTML = avatarInnerHtml(rec, fallbackEmoji);
-    hydrateAvatarMedia(btn);
+    hydrateAvatarVideos(btn);
   };
   btn.addEventListener('click', () => {
     const record = getRecord();
     const grid = EMOJI_PALETTE.map(e => `<button type="button" class="emoji-choice" data-e="${e}">${e}</button>`).join('');
-    const hasMedia = record && (record.avatarImage || record.avatarMediaId);
     openAvatarModal('Выберите иконку', `
-      <button class="primary block" id="uploadPhotoBtn">📷 Загрузить фото или видео</button>
-      <input type="file" id="uploadPhotoInput" accept="image/*,video/mp4,video/webm" style="display:none">
-      ${hasMedia ? `<button class="secondary block" id="removePhotoBtn" style="margin-top:8px">Убрать ${record.avatarMediaId ? 'медиафайл' : 'фото'}, вернуть эмодзи</button>` : ''}
+      <button class="primary block" id="uploadMediaBtn">📷 Загрузить фото / GIF / видео</button>
+      <input type="file" id="uploadMediaInput" accept="image/*,video/mp4,video/webm" style="display:none">
+      ${record && (record.avatarImage || record.avatarVideoId) ? `<button class="secondary block" id="removePhotoBtn" style="margin-top:8px">Убрать ${record.avatarVideoId ? 'медиа' : 'фото'}, вернуть эмодзи</button>` : ''}
       <div class="section-title" style="margin-top:10px">Или выберите эмодзи</div>
       <div class="emoji-grid">${grid}</div>
       <label style="margin-top:10px">Или впишите свой символ/эмодзи</label>
       <input id="customEmojiInput" maxlength="4" placeholder="🐲">
       <button class="primary block" id="customEmojiConfirm">Использовать</button>
     `);
-    document.getElementById('uploadPhotoBtn').addEventListener('click', () => document.getElementById('uploadPhotoInput').click());
-    document.getElementById('uploadPhotoInput').addEventListener('change', (e) => {
+    document.getElementById('uploadMediaBtn').addEventListener('click', () => document.getElementById('uploadMediaInput').click());
+    document.getElementById('uploadMediaInput').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      const isAnimated = file.type.startsWith('video/') || file.type === 'image/gif';
-      if (isAnimated) {
-        // Видео и GIF — напрямую как Blob в IndexedDB, без Canvas (не портим анимацию/качество)
-        if (file.size > AVATAR_MEDIA_MAX_BYTES) {
-          showToast('Файл слишком большой (максимум 30 МБ)', 'error');
+      const isRawMedia = file.type === 'image/gif' || file.type.startsWith('video/');
+      if (isRawMedia) {
+        if (file.size > 30 * 1024 * 1024) {
+          showToast('Файл слишком большой (максимум 30 МБ)');
+          e.target.value = '';
           return;
         }
         const rec = getRecord();
-        const oldMediaId = rec.avatarMediaId;
-        saveAvatarMedia(file).then((mediaRec) => {
-          rec.avatarMediaId = mediaRec.id;
+        const oldVideoId = rec.avatarVideoId;
+        saveAvatarVideo(file).then((mediaRec) => {
+          rec.avatarVideoId = mediaRec.id;
           rec.avatarImage = null;
           refreshBtn();
           onChange(rec);
           closeAvatarModal();
-          showToast(file.type.startsWith('video/') ? 'Видео добавлено' : 'Анимация добавлена');
-          if (oldMediaId && oldMediaId !== mediaRec.id) deleteAvatarMedia(oldMediaId).catch(() => {});
-        }).catch(() => showToast('Не удалось сохранить файл', 'error'));
-        return;
+          showToast(file.type.startsWith('video/') ? 'Видео добавлено' : 'GIF добавлен');
+          if (oldVideoId && oldVideoId !== mediaRec.id) deleteAvatarVideo(oldVideoId).catch(() => {});
+        }).catch(() => showToast('Не удалось сохранить файл'));
+      } else {
+        resizeImageFile(file, 1000, (dataUrl) => {
+          const rec = getRecord();
+          const oldVideoId = rec.avatarVideoId;
+          rec.avatarImage = dataUrl;
+          rec.avatarVideoId = null;
+          refreshBtn();
+          onChange(rec);
+          closeAvatarModal();
+          showToast('Фото добавлено');
+          if (oldVideoId) deleteAvatarVideo(oldVideoId).catch(() => {});
+        });
       }
-      // Статичные изображения — через Canvas, с качественным сглаживанием
-      resizeImageFile(file, AVATAR_MAX_DIM, AVATAR_JPEG_QUALITY, (dataUrl) => {
-        const rec = getRecord();
-        const oldMediaId = rec.avatarMediaId;
-        rec.avatarImage = dataUrl;
-        rec.avatarMediaId = null;
-        refreshBtn();
-        onChange(rec);
-        closeAvatarModal();
-        showToast('Фото добавлено');
-        if (oldMediaId) deleteAvatarMedia(oldMediaId).catch(() => {});
-      });
+      e.target.value = '';
     });
     const removeBtn = document.getElementById('removePhotoBtn');
     if (removeBtn) removeBtn.addEventListener('click', () => {
       const rec = getRecord();
-      const oldMediaId = rec.avatarMediaId;
+      const oldVideoId = rec.avatarVideoId;
       rec.avatarImage = null;
-      rec.avatarMediaId = null;
+      rec.avatarVideoId = null;
       refreshBtn();
       onChange(rec);
       closeAvatarModal();
-      if (oldMediaId) deleteAvatarMedia(oldMediaId).catch(() => {});
+      if (oldVideoId) deleteAvatarVideo(oldVideoId).catch(() => {});
     });
     document.querySelectorAll('.emoji-choice').forEach(b => {
       b.addEventListener('click', () => {
         const rec = getRecord();
-        const oldMediaId = rec.avatarMediaId;
+        const oldVideoId = rec.avatarVideoId;
         rec.avatar = b.dataset.e;
         rec.avatarImage = null;
-        rec.avatarMediaId = null;
+        rec.avatarVideoId = null;
         refreshBtn();
         onChange(rec);
         closeAvatarModal();
-        if (oldMediaId) deleteAvatarMedia(oldMediaId).catch(() => {});
+        if (oldVideoId) deleteAvatarVideo(oldVideoId).catch(() => {});
       });
     });
     document.getElementById('customEmojiConfirm').addEventListener('click', () => {
       const val = document.getElementById('customEmojiInput').value.trim();
       if (!val) return;
       const rec = getRecord();
-      const oldMediaId = rec.avatarMediaId;
+      const oldVideoId = rec.avatarVideoId;
       rec.avatar = val;
       rec.avatarImage = null;
-      rec.avatarMediaId = null;
+      rec.avatarVideoId = null;
       refreshBtn();
       onChange(rec);
       closeAvatarModal();
-      if (oldMediaId) deleteAvatarMedia(oldMediaId).catch(() => {});
+      if (oldVideoId) deleteAvatarVideo(oldVideoId).catch(() => {});
     });
   });
 }
 
-
 // эмодзи по умолчанию, если у записи ещё нет своего аватара
-function defaultBeastEmoji(type) {
-  const t = (type || '').toLowerCase();
+function defaultBeastEmoji(type, subtype) {
+  const t = ((type || '') + ' ' + (subtype || '')).toLowerCase();
   if (t.includes('дракон')) return '🐉';
   if (t.includes('зверь')) return '🐺';
   if (t.includes('нежит')) return '💀';
@@ -449,6 +387,10 @@ function defaultBeastEmoji(type) {
 function formatCreatureType(b) {
   if (!b || !b.type) return '';
   return b.subtype ? `${b.type} (${b.subtype})` : b.type;
+}
+function formatItemType(it) {
+  if (!it || !it.type) return '';
+  return it.subtype ? `${it.type} (${it.subtype})` : it.type;
 }
 // Собственные нарисованные SVG-иконки для предметов, где обычный эмодзи выглядит невыразительно
 const CUSTOM_ITEM_ICONS = {
@@ -556,7 +498,6 @@ function openCharacterForm() {
     const c = newCharacter(name);
     state.characters.push(c);
     saveState();
-    playSuccessChime();
     closeModal();
     openCharacter(c.id);
   });
@@ -584,7 +525,7 @@ function renderCharList() {
     el.addEventListener('click', () => openCharacter(c.id));
     list.appendChild(el);
   });
-  hydrateAvatarMedia(list);
+  hydrateAvatarVideos(list);
 }
 
 function migrateChar(c) {
@@ -624,11 +565,10 @@ function openCharacter(id) {
   currentCharId = id;
   const c = migrateChar(getChar(id));
   if (!c.avatar) c.avatar = '🧙';
-  switchSheetTab('combat');
   document.getElementById('sheetName').value = c.name;
   document.getElementById('sheetName').style.color = c.nameColor || '';
   document.getElementById('sheetAvatar').innerHTML = avatarInnerHtml(c, '🧙');
-  hydrateAvatarMedia(document.getElementById('sheetAvatar'));
+  hydrateAvatarVideos(document.getElementById('sheetAvatar'));
   renderCharColorSwatches(c);
   populateRaceClassOptions();
   document.getElementById('sheetRace').value = c.race;
@@ -861,30 +801,17 @@ function renderAbilityGrid(c) {
 function renderSaves(c) {
   const wrap = document.getElementById('savesList');
   const labels = { str: 'Сила', dex: 'Ловкость', con: 'Телосложение', int: 'Интеллект', wis: 'Мудрость', cha: 'Харизма' };
-  const keys = Object.keys(labels);
-  wrap.innerHTML = keys.map(k => {
+  wrap.innerHTML = Object.keys(labels).map(k => {
     const prof = !!c.saveProf[k];
     const total = mod(c.abilities[k]) + (prof ? (parseInt(c.prof) || 0) : 0);
-    return `<div class="skill-row" data-roll-key="${k}" style="cursor:pointer"><span><input type="checkbox" data-save="${k}" ${prof ? 'checked' : ''} style="width:auto;margin-right:6px;vertical-align:middle">${labels[k]}</span><span class="mod">${fmtMod(total)}</span></div>`;
+    return `<div class="skill-row"><span><input type="checkbox" data-save="${k}" ${prof ? 'checked' : ''} style="width:auto;margin-right:6px;vertical-align:middle">${labels[k]}</span><span class="mod">${fmtMod(total)}</span></div>`;
   }).join('');
   wrap.querySelectorAll('input[data-save]').forEach(chk => {
-    chk.addEventListener('change', (e) => {
-      e.stopPropagation();
+    chk.addEventListener('change', () => {
       const c = getChar(currentCharId);
       c.saveProf[chk.dataset.save] = chk.checked;
       saveState();
       renderSaves(c);
-    });
-  });
-  wrap.querySelectorAll('.skill-row[data-roll-key]').forEach((row) => {
-    row.addEventListener('click', (e) => {
-      if (e.target.tagName === 'INPUT') return;
-      const k = row.dataset.rollKey;
-      const cc = getChar(currentCharId);
-      const prof = !!cc.saveProf[k];
-      const total = mod(cc.abilities[k]) + (prof ? (parseInt(cc.prof) || 0) : 0);
-      const roll = 1 + Math.floor(Math.random() * 20);
-      showRollToast(`${labels[k]} · спасбросок`, [roll], total, 20);
     });
   });
 }
@@ -928,7 +855,7 @@ function renderAttacks(c) {
     return;
   }
   wrap.innerHTML = c.attacks.map((a, idx) => `
-    <div class="inv-item" data-idx="${idx}" style="cursor:pointer">
+    <div class="inv-item" data-idx="${idx}">
       <div>
         <div>${escapeHtml(a.name)}</div>
         <div class="meta" style="color:var(--text-dim);font-size:11px">Бонус ${escapeHtml(a.bonus)} · ${escapeHtml(a.damage)}${a.notes ? ' · ' + escapeHtml(a.notes) : ''}</div>
@@ -940,46 +867,12 @@ function renderAttacks(c) {
     </div>
   `).join('');
   wrap.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
+    btn.addEventListener('click', () => {
       const c = getChar(currentCharId);
       const idx = parseInt(btn.dataset.idx);
       if (btn.dataset.act === 'del') { c.attacks.splice(idx, 1); saveState(); renderAttacks(c); playChainClink(); }
       if (btn.dataset.act === 'edit') openAttackForm(c, idx);
     });
-  });
-  wrap.querySelectorAll('.inv-item[data-idx]').forEach(row => {
-    row.addEventListener('click', () => {
-      const c = getChar(currentCharId);
-      const idx = parseInt(row.dataset.idx);
-      openAttackRollChooser(c.attacks[idx]);
-    });
-  });
-}
-
-// Клик по атаке в листе персонажа — предлагает бросок на попадание
-// (d20 + бонус атаки из поля "Бонус атаки/СЛ") или бросок урона
-// (разобранный из поля "Урон и эффект", например "1к8+3 рубящего")
-function openAttackRollChooser(a) {
-  const bonus = parseInt(a.bonus) || 0;
-  const dmg = parseDiceNotation(a.damage);
-  openModal(a.name || 'Атака', `
-    <button class="primary block" id="atkRollHit">🎯 Бросок на попадание (d20${fmtMod(bonus)})</button>
-    ${dmg
-      ? `<button class="secondary block" id="atkRollDmg" style="margin-top:8px">💥 Бросок урона (${dmg.count}к${dmg.sides}${dmg.modifier ? fmtMod(dmg.modifier) : ''})</button>`
-      : '<div class="meta" style="margin-top:10px">Не удалось распознать кость урона в поле "Урон и эффект" — бросьте её вручную в дайсроллере</div>'}
-  `);
-  document.getElementById('atkRollHit').addEventListener('click', () => {
-    closeModal();
-    const roll = 1 + Math.floor(Math.random() * 20);
-    showRollToast(`${a.name} · попадание`, [roll], bonus, 20);
-  });
-  const dmgBtn = document.getElementById('atkRollDmg');
-  if (dmgBtn) dmgBtn.addEventListener('click', () => {
-    closeModal();
-    const rolls = [];
-    for (let i = 0; i < dmg.count; i++) rolls.push(1 + Math.floor(Math.random() * dmg.sides));
-    showRollToast(`${a.name} · урон`, rolls, dmg.modifier);
   });
 }
 
@@ -1014,28 +907,15 @@ function renderSkills(c) {
   list.innerHTML = SKILL_LIST.map(s => {
     const prof = !!c.skillProf[s.name];
     const total = mod(c.abilities[s.ability]) + (prof ? (parseInt(c.prof) || 0) : 0);
-    return `<div class="skill-row" data-roll-skill="${escapeAttr(s.name)}" data-roll-ability="${s.ability}" style="cursor:pointer"><span><input type="checkbox" data-skill="${escapeAttr(s.name)}" ${prof ? 'checked' : ''} style="width:auto;margin-right:6px;vertical-align:middle">${s.name} <span style="color:var(--text-dim);font-size:11px">(${s.ability})</span></span><span class="mod">${fmtMod(total)}</span></div>`;
+    return `<div class="skill-row"><span><input type="checkbox" data-skill="${escapeAttr(s.name)}" ${prof ? 'checked' : ''} style="width:auto;margin-right:6px;vertical-align:middle">${s.name} <span style="color:var(--text-dim);font-size:11px">(${s.ability})</span></span><span class="mod">${fmtMod(total)}</span></div>`;
   }).join('');
   list.querySelectorAll('input[data-skill]').forEach(chk => {
-    chk.addEventListener('change', (e) => {
-      e.stopPropagation();
+    chk.addEventListener('change', () => {
       const c = getChar(currentCharId);
       c.skillProf[chk.dataset.skill] = chk.checked;
       saveState();
       renderSkills(c);
       updateComputedStats(c);
-    });
-  });
-  list.querySelectorAll('.skill-row[data-roll-skill]').forEach((row) => {
-    row.addEventListener('click', (e) => {
-      if (e.target.tagName === 'INPUT') return;
-      const name = row.dataset.rollSkill;
-      const ability = row.dataset.rollAbility;
-      const cc = getChar(currentCharId);
-      const prof = !!cc.skillProf[name];
-      const total = mod(cc.abilities[ability]) + (prof ? (parseInt(cc.prof) || 0) : 0);
-      const roll = 1 + Math.floor(Math.random() * 20);
-      showRollToast(name, [roll], total, 20);
     });
   });
 }
@@ -1060,7 +940,7 @@ function renderInventory(c) {
     <div class="inv-item">
       <div>
         <div>${escapeHtml(it.name)} ${it.equipped ? '✅' : ''}</div>
-        <div class="meta" style="color:var(--text-dim);font-size:11px">${escapeHtml(it.type || '')}${bonusParts.length ? ' · ' + bonusParts.join(' · ') : ''}</div>
+        <div class="meta" style="color:var(--text-dim);font-size:11px">${escapeHtml(formatItemType(it) || '')}${bonusParts.length ? ' · ' + bonusParts.join(' · ') : ''}</div>
       </div>
       <div class="qty-controls row" style="flex:none;gap:4px;align-items:center">
         ${canEquip ? `<button data-idx="${idx}" data-act="equip" class="equip-btn ${it.equipped ? 'is-on' : ''}" title="${it.equipped ? 'Снять' : 'Надеть'}">${it.equipped ? '✓' : '⭘'}</button>` : ''}
@@ -1116,12 +996,12 @@ function updateTotalAC(c) {
 document.getElementById('addInvFromCatalog').addEventListener('click', () => {
   const sorted = state.items.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'));
   openListPicker(false, 'Выберите предмет', sorted,
-    (it) => `<div class="avatar-circle small">${avatarInnerHtml(it, defaultItemEmoji(it.name, it.type))}</div><div style="flex:1"><div>${escapeHtml(it.name)}</div><div class="meta">${escapeHtml(it.type)}${it.rarity ? ' · ' + escapeHtml(it.rarity) : ''}</div></div><span class="badge">${escapeHtml(it.cost || '')}</span>`,
+    (it) => `<div class="avatar-circle small">${avatarInnerHtml(it, defaultItemEmoji(it.name, it.type))}</div><div style="flex:1"><div>${escapeHtml(it.name)}</div><div class="meta">${escapeHtml(formatItemType(it))}${it.rarity ? ' · ' + escapeHtml(it.rarity) : ''}</div></div><span class="badge">${escapeHtml(it.cost || '')}</span>`,
     (item) => {
       const c = getChar(currentCharId);
       const existing = c.inventory.find(i => i.itemId === item.id);
       if (existing) existing.qty++;
-      else c.inventory.push({ itemId: item.id, name: item.name, type: item.type, qty: 1, armorSlot: item.armorSlot || 'none', armorBaseAC: item.armorBaseAC || 0, acBonus: item.acBonus || 0, atkBonus: item.atkBonus || 0, equipped: false });
+      else c.inventory.push({ itemId: item.id, name: item.name, type: item.type, subtype: item.subtype || '', qty: 1, armorSlot: item.armorSlot || 'none', armorBaseAC: item.armorBaseAC || 0, acBonus: item.acBonus || 0, atkBonus: item.atkBonus || 0, equipped: false });
       saveState();
       renderInventory(c);
     },
@@ -1274,12 +1154,12 @@ function bindRichToolbars() {
     bar.querySelector('.anchor-btn').addEventListener('click', () => {
       const sel = window.getSelection();
       if (sel.isCollapsed) {
-        showToast('Сначала выделите текст — например, название умения', 'error');
+        showToast('Сначала выделите текст — например, название умения');
         return;
       }
       target.focus();
       const text = sel.toString();
-      if (!text.trim()) { showToast('Сначала выделите текст — например, название умения', 'error'); return; }
+      if (!text.trim()) { showToast('Сначала выделите текст — например, название умения'); return; }
       // добавляем невидимый пробел после метки, иначе курсор "застревает" внутри
       // подсвеченного span и весь следующий набранный текст тоже выглядит как метка
       document.execCommand('insertHTML', false, `<span class="text-anchor">${escapeHtml(text)}</span>&nbsp;`);
@@ -1289,7 +1169,7 @@ function bindRichToolbars() {
     });
     bar.querySelector('.jump-btn').addEventListener('click', () => {
       const anchors = Array.from(target.querySelectorAll('.text-anchor'));
-      if (!anchors.length) { showToast('Пока нет меток — выделите текст и нажмите #', 'error'); return; }
+      if (!anchors.length) { showToast('Пока нет меток — выделите текст и нажмите #'); return; }
       const items = anchors.map(el => ({ el, text: el.textContent }));
       openListPicker(false, 'Перейти к метке', items,
         (item) => `<div style="flex:1">${escapeHtml(item.text)}</div>`,
@@ -1365,12 +1245,15 @@ function updateHpBar(c) {
 document.getElementById('backToList').addEventListener('click', () => switchView('characters'));
 document.getElementById('deleteCharBtn').addEventListener('click', () => {
   if (!confirm('Удалить этого персонажа безвозвратно?')) return;
+  const charToDelete = getChar(currentCharId);
+  const videoId = charToDelete && charToDelete.avatarVideoId;
   state.characters = state.characters.filter(c => c.id !== currentCharId);
   currentCharId = null;
   saveState();
   playChainClink();
   switchView('characters');
   renderCharList();
+  if (videoId) deleteAvatarVideo(videoId).catch(() => {});
 });
 
 // ==================== BESTIARY ====================
@@ -1389,32 +1272,18 @@ function renderBestiaryFilterChips() {
   const wrap = document.getElementById('bestiaryFilter');
   wrap.innerHTML = types.map(t => `<button class="chip ${t === bestiaryFilter ? 'active' : ''}" data-t="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('');
   wrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-      bestiaryFilter = chip.dataset.t;
-      bestiarySubtypeFilter = 'Все'; // при смене типа список подтипов меняется, старый выбор может уже не подходить
-      renderBestiary();
-    });
+    chip.addEventListener('click', () => { bestiaryFilter = chip.dataset.t; renderBestiary(); });
   });
 
-  // Подтип зависит от выбранного типа — считаем список только по уже
-  // отфильтрованным по типу существам, чтобы не показывать подтипы,
-  // которых у этого типа не бывает
-  const subtypeTitle = document.getElementById('bestiarySubtypeTitle');
-  const subWrap = document.getElementById('bestiarySubtypeFilter');
-  const relevantForSub = state.bestiary.filter(b => bestiaryFilter === 'Все' || b.type === bestiaryFilter);
-  const subValues = ['Все', ...new Set(relevantForSub.map(b => b.subtype).filter(Boolean))];
-  if (subValues.length > 1) {
-    subtypeTitle.style.display = '';
-    subWrap.style.display = '';
-    subWrap.innerHTML = subValues.map(st => `<button class="chip ${st === bestiarySubtypeFilter ? 'active' : ''}" data-st="${escapeHtml(st)}">${escapeHtml(st)}</button>`).join('');
-    subWrap.querySelectorAll('.chip').forEach(chip => {
-      chip.addEventListener('click', () => { bestiarySubtypeFilter = chip.dataset.st; renderBestiary(); });
-    });
-  } else {
-    subtypeTitle.style.display = 'none';
-    subWrap.style.display = 'none';
-    bestiarySubtypeFilter = 'Все';
-  }
+  // Подтип (например, у "Гуманоид" бывают "гоблиноид", "орк" и т.п.) —
+  // отдельный фильтр, чтобы существа с общим типом, но разными подтипами,
+  // не путались друг с другом в списке "Тип".
+  const subtypes = ['Все', ...new Set(state.bestiary.map(b => b.subtype).filter(Boolean))];
+  const subtypeWrap = document.getElementById('bestiarySubtypeFilter');
+  subtypeWrap.innerHTML = subtypes.map(st => `<button class="chip ${st === bestiarySubtypeFilter ? 'active' : ''}" data-st="${escapeHtml(st)}">${escapeHtml(st)}</button>`).join('');
+  subtypeWrap.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => { bestiarySubtypeFilter = chip.dataset.st; renderBestiary(); });
+  });
 
   const crWrap = document.getElementById('bestiaryCrFilter');
   const crValues = ['Все', ...new Set(state.bestiary.map(b => b.cr).filter(Boolean))].sort((a, b) => {
@@ -1451,13 +1320,14 @@ function renderBestiary() {
       (bestiarySubtypeFilter === 'Все' || b.subtype === bestiarySubtypeFilter) &&
       (bestiaryCrFilter === 'Все' || b.cr === bestiaryCrFilter) &&
       (bestiarySizeFilter === 'Все' || b.size === bestiarySizeFilter) &&
-      (bestiaryHabitatFilter === 'Все' || (b.habitat || []).includes(bestiaryHabitatFilter))
+      (bestiaryHabitatFilter === 'Все' || (b.habitat || []).includes(bestiaryHabitatFilter)) &&
+      (!bestiarySearchQuery || b.name.toLowerCase().includes(bestiarySearchQuery.toLowerCase()))
     )
     .sort((a, b) => crToNumber(a.cr) - crToNumber(b.cr));
   if (!items.length) { list.innerHTML = '<div class="empty-state">Ничего не найдено</div>'; return; }
   list.innerHTML = items.map(b => `
     <div class="list-item" data-id="${b.id}">
-      <div class="avatar-circle small">${avatarInnerHtml(b, defaultBeastEmoji(b.type))}</div>
+      <div class="avatar-circle small">${avatarInnerHtml(b, defaultBeastEmoji(b.type, b.subtype))}</div>
       <div style="flex:1">
         <div>${escapeHtml(b.name)} ${b.custom ? '★' : ''}</div>
         <div class="meta">${escapeHtml(formatCreatureType(b))}${b.size ? ' · ' + escapeHtml(b.size) : ''} · КО ${escapeHtml(b.cr)} · КД ${b.ac} · ХП ${escapeHtml(String(b.hp))}</div>
@@ -1468,7 +1338,7 @@ function renderBestiary() {
   list.querySelectorAll('.list-item').forEach(el => {
     el.addEventListener('click', () => openBestiaryDetail(el.dataset.id));
   });
-  hydrateAvatarMedia(list);
+  hydrateAvatarVideos(list);
 }
 
 function openBestiaryDetail(id) {
@@ -1489,7 +1359,7 @@ function openBestiaryDetail(id) {
   if (b.swimSpeed) speedParts.push(`плавание ${escapeHtml(b.swimSpeed)}`);
   if (b.climbSpeed) speedParts.push(`лазанье ${escapeHtml(b.climbSpeed)}`);
   openModal(b.name, `
-    <div class="avatar-circle large" style="margin:0 auto 12px">${avatarInnerHtml(b, defaultBeastEmoji(b.type))}</div>
+    <div class="avatar-circle large" style="margin:0 auto 12px">${avatarInnerHtml(b, defaultBeastEmoji(b.type, b.subtype))}</div>
     <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(formatCreatureType(b))}${b.size ? ' · ' + escapeHtml(b.size) : ''} · КО ${escapeHtml(b.cr)}</div>
     ${b.habitat && b.habitat.length ? `<div class="meta" style="margin-bottom:8px;text-align:center">Обитание: ${escapeHtml(b.habitat.join(', '))}</div>` : ''}
     <div style="margin-bottom:8px">КД ${b.ac} · ХП ${escapeHtml(String(b.hp))}</div>
@@ -1506,7 +1376,7 @@ function openBestiaryDetail(id) {
   document.querySelectorAll('[data-open-spell]').forEach(el => {
     el.addEventListener('click', () => openSpellDetail(el.dataset.openSpell, true));
   });
-  hydrateAvatarMedia();
+  hydrateAvatarVideos();
   if (b.custom) {
     document.getElementById('editBeast').addEventListener('click', () => openBestiaryForm(b));
     document.getElementById('deleteBeast').addEventListener('click', () => {
@@ -1536,7 +1406,7 @@ function openBestiaryForm(existing) {
   const sizeOptions = CREATURE_SIZES.map(s => `<option ${s === b.size ? 'selected' : ''}>${s}</option>`).join('');
   const habitatChips = HABITATS.map(h => `<button type="button" class="chip ${b.habitat.includes(h) ? 'active' : ''}" data-h="${escapeHtml(h)}">${escapeHtml(h)}</button>`).join('');
   openModal(existing ? 'Редактировать существо' : 'Новое существо', `
-    <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('bAvatar', b, defaultBeastEmoji(b.type), true)}</div>
+    <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('bAvatar', b, defaultBeastEmoji(b.type, b.subtype), true)}</div>
     <label>Название</label><input id="bName" value="${escapeAttr(b.name)}">
     <div class="row">
       <div><label>Тип</label><input id="bType" value="${escapeAttr(b.type)}" placeholder="Например, Гуманоид"></div>
@@ -1580,8 +1450,8 @@ function openBestiaryForm(existing) {
     <button class="primary block" id="saveBeast">Сохранить</button>
   `);
   bindRichToolbars();
-  bindAvatarPicker('bAvatar', b, defaultBeastEmoji(b.type), () => {});
-  hydrateAvatarMedia();
+  bindAvatarPicker('bAvatar', b, defaultBeastEmoji(b.type, b.subtype), () => {});
+  hydrateAvatarVideos();
   const selectedHabitats = new Set(b.habitat);
   document.getElementById('bHabitatChips').querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', () => {
@@ -1642,7 +1512,7 @@ function openBestiaryForm(existing) {
     b.languages = document.getElementById('bLanguages').value.trim();
     b.size = document.getElementById('bSize').value;
     b.habitat = Array.from(selectedHabitats);
-    b.avatar = b.avatar || defaultBeastEmoji(document.getElementById('bType').value.trim());
+    b.avatar = b.avatar || defaultBeastEmoji(document.getElementById('bType').value.trim(), document.getElementById('bSubtype').value.trim());
     const nums = document.getElementById('bAbilities').value.trim().split(/\s+/).map(n => parseInt(n) || 10);
     const keys = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
     keys.forEach((k, i) => { b.abilities[k] = nums[i] !== undefined ? nums[i] : 10; });
@@ -1718,6 +1588,14 @@ function renderSpells() {
 document.getElementById('spellSearch').addEventListener('input', (e) => {
   spellSearchQuery = e.target.value;
   renderSpells();
+});
+document.getElementById('bestiarySearch').addEventListener('input', (e) => {
+  bestiarySearchQuery = e.target.value;
+  renderBestiary();
+});
+document.getElementById('itemsSearch').addEventListener('input', (e) => {
+  itemsSearchQuery = e.target.value;
+  renderItems();
 });
 
 function openSpellDetail(id, aux) {
@@ -1867,6 +1745,15 @@ function renderItemsFilterChips() {
     chip.addEventListener('click', () => { itemsFilter = chip.dataset.t; renderItems(); });
   });
 
+  // Подтип (например, у "Броня" бывают "лёгкая", "тяжёлая" и т.п.) — тот же
+  // принцип, что и подтип в бестиарии.
+  const subtypes = ['Все', ...new Set(state.items.map(i => i.subtype).filter(Boolean))];
+  const subtypeWrap = document.getElementById('itemsSubtypeFilter');
+  subtypeWrap.innerHTML = subtypes.map(st => `<button class="chip ${st === itemsSubtypeFilter ? 'active' : ''}" data-st="${escapeHtml(st)}">${escapeHtml(st)}</button>`).join('');
+  subtypeWrap.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => { itemsSubtypeFilter = chip.dataset.st; renderItems(); });
+  });
+
   const rarWrap = document.getElementById('itemsRarityFilter');
   const rarValues = ['Все', ...RARITIES.filter(r => state.items.some(i => i.rarity === r))];
   rarWrap.innerHTML = rarValues.map(r => `<button class="chip ${r === itemsRarityFilter ? 'active' : ''}" data-r="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join('');
@@ -1883,7 +1770,12 @@ function renderItems() {
   renderItemsFilterChips();
   const list = document.getElementById('itemsList');
   const items = state.items
-    .filter(i => (itemsFilter === 'Все' || i.type === itemsFilter) && (itemsRarityFilter === 'Все' || i.rarity === itemsRarityFilter))
+    .filter(i =>
+      (itemsFilter === 'Все' || i.type === itemsFilter) &&
+      (itemsSubtypeFilter === 'Все' || i.subtype === itemsSubtypeFilter) &&
+      (itemsRarityFilter === 'Все' || i.rarity === itemsRarityFilter) &&
+      (!itemsSearchQuery || i.name.toLowerCase().includes(itemsSearchQuery.toLowerCase()))
+    )
     .sort((a, b) => rarityToNumber(a.rarity) - rarityToNumber(b.rarity));
   if (!items.length) { list.innerHTML = '<div class="empty-state">Ничего не найдено</div>'; return; }
   list.innerHTML = items.map(it => `
@@ -1891,7 +1783,7 @@ function renderItems() {
       <div class="avatar-circle small">${avatarInnerHtml(it, defaultItemEmoji(it.name, it.type))}</div>
       <div style="flex:1">
         <div>${escapeHtml(it.name)} ${it.custom ? '★' : ''}</div>
-        <div class="meta">${escapeHtml(it.type)}${it.rarity ? ' · ' + escapeHtml(it.rarity) : ''} · ${escapeHtml(it.weight || '')}</div>
+        <div class="meta">${escapeHtml(formatItemType(it))}${it.rarity ? ' · ' + escapeHtml(it.rarity) : ''} · ${escapeHtml(it.weight || '')}</div>
       </div>
       <span class="badge">${escapeHtml(it.cost || '')}</span>
     </div>
@@ -1899,7 +1791,7 @@ function renderItems() {
   list.querySelectorAll('.list-item').forEach(el => {
     el.addEventListener('click', () => openItemDetail(el.dataset.id));
   });
-  hydrateAvatarMedia(list);
+  hydrateAvatarVideos(list);
 }
 
 function armorSlotDescription(it) {
@@ -1917,28 +1809,31 @@ function openItemDetail(id) {
   const armorDesc = armorSlotDescription(it);
   openModal(it.name, `
     <div class="avatar-circle large" style="margin:0 auto 12px">${avatarInnerHtml(it, defaultItemEmoji(it.name, it.type))}</div>
-    <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(it.type)}${it.rarity ? ' · ' + escapeHtml(it.rarity) : ''} · ${escapeHtml(it.weight || '')} · ${escapeHtml(it.cost || '')}</div>
+    <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(formatItemType(it))}${it.rarity ? ' · ' + escapeHtml(it.rarity) : ''} · ${escapeHtml(it.weight || '')} · ${escapeHtml(it.cost || '')}</div>
     ${armorDesc ? `<div style="margin-bottom:8px">${armorDesc}</div>` : ''}
     ${it.atkBonus ? `<div style="margin-bottom:8px">⚔️ Бонус к атаке при экипировке: +${it.atkBonus}</div>` : ''}
     <div style="white-space:pre-wrap">${escapeHtml(it.properties || '')}</div>
     ${editBtn}
   `);
+  hydrateAvatarVideos();
   if (it.custom) {
     document.getElementById('editItem').addEventListener('click', () => openItemForm(it));
     document.getElementById('deleteItem').addEventListener('click', () => {
       if (!confirm('Удалить этот предмет?')) return;
+      const videoId = it.avatarVideoId;
       state.items = state.items.filter(x => x.id !== it.id);
       saveState();
       playChainClink();
       closeModal();
       renderItems();
+      if (videoId) deleteAvatarVideo(videoId).catch(() => {});
     });
   }
 }
 
 
 function openItemForm(existing) {
-  const it = existing || { id: uid('i'), name: '', type: '', weight: '', cost: '', properties: '', armorSlot: 'none', armorBaseAC: 0, acBonus: 0, atkBonus: 0, rarity: 'Обычный', avatar: '', custom: true };
+  const it = existing || { id: uid('i'), name: '', type: '', subtype: '', weight: '', cost: '', properties: '', armorSlot: 'none', armorBaseAC: 0, acBonus: 0, atkBonus: 0, rarity: 'Обычный', avatar: '', custom: true };
   if (!it.rarity) it.rarity = 'Обычный';
   if (!it.armorSlot) it.armorSlot = it.acBonus ? 'flat' : 'none'; // обратная совместимость со старыми предметами
   const rarityOptions = RARITIES.map(r => `<option ${r === it.rarity ? 'selected' : ''}>${r}</option>`).join('');
@@ -1947,6 +1842,7 @@ function openItemForm(existing) {
     <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('itAvatar', it, defaultItemEmoji(it.name, it.type), true)}</div>
     <label>Название</label><input id="itName" value="${escapeAttr(it.name)}">
     <label>Тип</label><input id="itType" value="${escapeAttr(it.type)}" placeholder="Оружие / Броня / Снаряжение">
+    <label>Подтип</label><input id="itSubtype" value="${escapeAttr(it.subtype || '')}" placeholder="лёгкая / тяжёлая / ...">
     <label>Редкость</label>
     <select id="itRarity">${rarityOptions}</select>
     <div class="row">
@@ -1968,6 +1864,7 @@ function openItemForm(existing) {
     <button class="primary block" id="saveItem">Сохранить</button>
   `);
   bindAvatarPicker('itAvatar', it, defaultItemEmoji(it.name, it.type), () => {});
+  hydrateAvatarVideos();
   document.getElementById('itArmorSlot').addEventListener('change', (e) => {
     const v = e.target.value;
     document.getElementById('itArmorBaseRow').style.display = (v === 'light' || v === 'medium' || v === 'heavy') ? 'flex' : 'none';
@@ -1976,6 +1873,7 @@ function openItemForm(existing) {
   document.getElementById('saveItem').addEventListener('click', () => {
     it.name = document.getElementById('itName').value.trim() || 'Без названия';
     it.type = document.getElementById('itType').value.trim() || 'Снаряжение';
+    it.subtype = document.getElementById('itSubtype').value.trim();
     it.rarity = document.getElementById('itRarity').value;
     it.weight = document.getElementById('itWeight').value.trim();
     it.cost = document.getElementById('itCost').value.trim();
@@ -2022,7 +1920,7 @@ function renderBattle() {
       </div>
       <div class="row" style="flex:none;gap:4px;align-items:center">
         <button data-idx="${c._idx}" data-act="hpdown">−</button>
-        <button type="button" class="battle-hp-value" data-idx="${c._idx}" data-act="hpedit">${c.hp}</button>
+        <input type="number" class="battle-hp-input" data-idx="${c._idx}" data-act="hpval" value="${c.hp}">
         <span class="meta">/${c.maxHp}</span>
         <button data-idx="${c._idx}" data-act="hpup">+</button>
         <button data-idx="${c._idx}" data-act="del">✕</button>
@@ -2035,7 +1933,6 @@ function renderBattle() {
       const c = state.battle.combatants[idx];
       if (btn.dataset.act === 'hpup') c.hp = Math.min(c.maxHp, c.hp + 1);
       if (btn.dataset.act === 'hpdown') c.hp = Math.max(0, c.hp - 1);
-      if (btn.dataset.act === 'hpedit') { openHpAdjustModal(idx); return; }
       if (btn.dataset.act === 'del') {
         state.battle.combatants.splice(idx, 1);
         if (state.battle.currentIndex >= state.battle.combatants.length) state.battle.currentIndex = 0;
@@ -2045,35 +1942,14 @@ function renderBattle() {
       renderBattle();
     });
   });
-}
-
-// Модалка для быстрого нанесения урона/лечения на большие значения —
-// кнопки +/- рядом остаются для точечной правки на 1 единицу
-function openHpAdjustModal(idx) {
-  const c = state.battle.combatants[idx];
-  openModal(`${c.name} — здоровье`, `
-    <div class="hp-adjust-current">Текущее: <b id="hpAdjustCurrentVal">${c.hp}</b> / ${c.maxHp}</div>
-    <label>Количество</label>
-    <input id="hpAdjustAmount" type="number" min="0" value="1" style="text-align:center">
-    <div class="hp-adjust-row">
-      <button class="danger" id="hpAdjustDamage">⚔ Нанести урон</button>
-      <button class="primary" id="hpAdjustHeal">🩹 Полечить</button>
-    </div>
-  `);
-  const amountInput = document.getElementById('hpAdjustAmount');
-  amountInput.focus();
-  amountInput.select();
-  const apply = (sign) => {
-    const amt = Math.max(0, parseInt(amountInput.value) || 0);
-    const cc = state.battle.combatants[idx];
-    cc.hp = sign > 0 ? Math.min(cc.maxHp, cc.hp + amt) : Math.max(0, cc.hp - amt);
-    saveState();
-    closeModal();
-    renderBattle();
-    if (sign > 0) playFormatClick(); else playChainClink();
-  };
-  document.getElementById('hpAdjustDamage').addEventListener('click', () => apply(-1));
-  document.getElementById('hpAdjustHeal').addEventListener('click', () => apply(1));
+  list.querySelectorAll('input[data-act="hpval"]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const idx = parseInt(inp.dataset.idx);
+      const c = state.battle.combatants[idx];
+      c.hp = Math.max(0, Math.min(c.maxHp, parseInt(inp.value) || 0));
+      saveState();
+    });
+  });
 }
 
 document.getElementById('nextTurnBtn').addEventListener('click', () => {
@@ -2194,7 +2070,7 @@ function openBookViewer(id, books) {
   const book = books.find(b => b.id === id);
   if (!book) return;
   if (typeof pdfjsLib === 'undefined') {
-    showToast('Не удалось загрузить модуль чтения PDF — проверьте подключение к интернету при первом открытии книги', 'error');
+    showToast('Не удалось загрузить модуль чтения PDF — проверьте подключение к интернету при первом открытии книги');
     return;
   }
   document.getElementById('pdfViewerTitle').textContent = book.name;
@@ -2277,14 +2153,14 @@ document.getElementById('addBookBtn').addEventListener('click', () => {
 document.getElementById('bookFileInput').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  if (file.type !== 'application/pdf') { showToast('Нужен файл в формате PDF', 'error'); return; }
-  showToast('Загружаем книгу…', 'info');
+  if (file.type !== 'application/pdf') { showToast('Нужен файл в формате PDF'); return; }
+  showToast('Загружаем книгу…');
   addBookFile(file).then(() => {
     playPageTurn();
     showToast('Книга добавлена');
     renderBooks();
   }).catch(() => {
-    showToast('Не удалось сохранить файл — возможно, не хватает места', 'error');
+    showToast('Не удалось сохранить файл — возможно, не хватает места');
   });
   e.target.value = '';
 });
