@@ -796,6 +796,15 @@ function renderAbilityGrid(c) {
       updateTotalAC(c);
     });
   });
+  // Клик по хар-ке (кроме самого поля ввода значения) — быстрый бросок проверки d20+модификатор
+  grid.querySelectorAll('.ability-box').forEach(box => {
+    box.addEventListener('click', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      const c = getChar(currentCharId);
+      const key = box.dataset.key;
+      quickRoll(20, mod(c.abilities[key]), labels[key]);
+    });
+  });
 }
 
 function renderSaves(c) {
@@ -804,7 +813,7 @@ function renderSaves(c) {
   wrap.innerHTML = Object.keys(labels).map(k => {
     const prof = !!c.saveProf[k];
     const total = mod(c.abilities[k]) + (prof ? (parseInt(c.prof) || 0) : 0);
-    return `<div class="skill-row"><span><input type="checkbox" data-save="${k}" ${prof ? 'checked' : ''} style="width:auto;margin-right:6px;vertical-align:middle">${labels[k]}</span><span class="mod">${fmtMod(total)}</span></div>`;
+    return `<div class="skill-row" data-save-row="${k}" style="cursor:pointer"><span><input type="checkbox" data-save="${k}" ${prof ? 'checked' : ''} style="width:auto;margin-right:6px;vertical-align:middle">${labels[k]}</span><span class="mod">${fmtMod(total)}</span></div>`;
   }).join('');
   wrap.querySelectorAll('input[data-save]').forEach(chk => {
     chk.addEventListener('change', () => {
@@ -812,6 +821,17 @@ function renderSaves(c) {
       c.saveProf[chk.dataset.save] = chk.checked;
       saveState();
       renderSaves(c);
+    });
+  });
+  // Клик по строке (кроме чекбокса профы) — быстрый бросок спасброска d20+модификатор
+  wrap.querySelectorAll('.skill-row[data-save-row]').forEach(row => {
+    row.addEventListener('click', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      const c = getChar(currentCharId);
+      const key = row.dataset.saveRow;
+      const prof = !!c.saveProf[key];
+      const total = mod(c.abilities[key]) + (prof ? (parseInt(c.prof) || 0) : 0);
+      quickRoll(20, total, labels[key] + ' (спасбросок)');
     });
   });
 }
@@ -855,7 +875,7 @@ function renderAttacks(c) {
     return;
   }
   wrap.innerHTML = c.attacks.map((a, idx) => `
-    <div class="inv-item" data-idx="${idx}">
+    <div class="inv-item" data-idx="${idx}" style="cursor:pointer">
       <div>
         <div>${escapeHtml(a.name)}</div>
         <div class="meta" style="color:var(--text-dim);font-size:11px">Бонус ${escapeHtml(a.bonus)} · ${escapeHtml(a.damage)}${a.notes ? ' · ' + escapeHtml(a.notes) : ''}</div>
@@ -867,11 +887,23 @@ function renderAttacks(c) {
     </div>
   `).join('');
   wrap.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       const c = getChar(currentCharId);
       const idx = parseInt(btn.dataset.idx);
       if (btn.dataset.act === 'del') { c.attacks.splice(idx, 1); saveState(); renderAttacks(c); playChainClink(); }
       if (btn.dataset.act === 'edit') openAttackForm(c, idx);
+    });
+  });
+  // Клик по строке атаки (кроме кнопок ✎/✕) — быстрый бросок атаки d20+бонус
+  wrap.querySelectorAll('.inv-item[data-idx]').forEach(row => {
+    row.addEventListener('click', () => {
+      const c = getChar(currentCharId);
+      const idx = parseInt(row.dataset.idx);
+      const a = c.attacks[idx];
+      if (!a) return;
+      const bonus = parseInt(a.bonus) || 0;
+      quickRoll(20, bonus, a.name + ' (атака)');
     });
   });
 }
@@ -907,7 +939,7 @@ function renderSkills(c) {
   list.innerHTML = SKILL_LIST.map(s => {
     const prof = !!c.skillProf[s.name];
     const total = mod(c.abilities[s.ability]) + (prof ? (parseInt(c.prof) || 0) : 0);
-    return `<div class="skill-row"><span><input type="checkbox" data-skill="${escapeAttr(s.name)}" ${prof ? 'checked' : ''} style="width:auto;margin-right:6px;vertical-align:middle">${s.name} <span style="color:var(--text-dim);font-size:11px">(${s.ability})</span></span><span class="mod">${fmtMod(total)}</span></div>`;
+    return `<div class="skill-row" data-skill-row="${escapeAttr(s.name)}" style="cursor:pointer"><span><input type="checkbox" data-skill="${escapeAttr(s.name)}" ${prof ? 'checked' : ''} style="width:auto;margin-right:6px;vertical-align:middle">${s.name} <span style="color:var(--text-dim);font-size:11px">(${s.ability})</span></span><span class="mod">${fmtMod(total)}</span></div>`;
   }).join('');
   list.querySelectorAll('input[data-skill]').forEach(chk => {
     chk.addEventListener('change', () => {
@@ -916,6 +948,18 @@ function renderSkills(c) {
       saveState();
       renderSkills(c);
       updateComputedStats(c);
+    });
+  });
+  // Клик по строке (кроме чекбокса владения) — быстрый бросок навыка d20+модификатор
+  list.querySelectorAll('.skill-row[data-skill-row]').forEach(row => {
+    row.addEventListener('click', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      const c = getChar(currentCharId);
+      const s = SKILL_LIST.find(x => x.name === row.dataset.skillRow);
+      if (!s) return;
+      const prof = !!c.skillProf[s.name];
+      const total = mod(c.abilities[s.ability]) + (prof ? (parseInt(c.prof) || 0) : 0);
+      quickRoll(20, total, s.name);
     });
   });
 }
@@ -2511,6 +2555,19 @@ function openDiceRoller() {
 
 let diceModifier = 0;
 let diceAdvMode = 'none'; // 'none' | 'adv' | 'dis' — работает только для одиночного d20
+let quickRollLabel = ''; // если задан — подставляется перед авто-броском (клик по хар-ке/навыку/оружию)
+
+// Быстрый бросок по клику на хар-ку/спасбросок/навык/атаку в листе персонажа:
+// открывает знакомую модалку кубиков с уже выставленным d20 и модификатором
+// и сразу нажимает "Бросить", чтобы результат появился в один тап, как раньше.
+function quickRoll(sides, modifier, label) {
+  selectedDie = sides;
+  diceModifier = modifier;
+  diceAdvMode = 'none';
+  quickRollLabel = label || '';
+  openDiceRoller();
+  document.getElementById('rollDiceBtn').click();
+}
 
 function renderDiceModal() {
   const buttons = DICE_TYPES.map(d => `<button type="button" class="chip dice-btn ${d === selectedDie ? 'active' : ''}" data-d="${d}">d${d}</button>`).join('');
@@ -2601,6 +2658,7 @@ function renderDiceModal() {
       for (let i = 0; i < count; i++) rolls.push(1 + Math.floor(Math.random() * selectedDie));
       label = `${count}к${selectedDie}${modifier ? (modifier > 0 ? '+' + modifier : modifier) : ''}`;
     }
+    if (quickRollLabel) { label = `${quickRollLabel}: ${label}`; quickRollLabel = ''; }
     const total = rolls.reduce((a, b) => a + b, 0) + modifier;
     playDiceRoll();
     animateDiceRoll(total, () => {
