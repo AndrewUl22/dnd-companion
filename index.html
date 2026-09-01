@@ -106,6 +106,14 @@
       </div>
     </div>
 
+    <div class="sheet-tabs" id="sheetTabs">
+      <button type="button" class="sheet-tab-btn" data-tab="combat">⚔️ Бой</button>
+      <button type="button" class="sheet-tab-btn" data-tab="magic">✨ Магия</button>
+      <button type="button" class="sheet-tab-btn" data-tab="inventory">🎒 Инвентарь</button>
+      <button type="button" class="sheet-tab-btn" data-tab="info">📜 Инфо</button>
+    </div>
+
+    <div class="sheet-tab-panel" data-tab="combat">
     <div class="section-title">Характеристики</div>
     <div class="ability-grid" id="abilityGrid"></div>
 
@@ -212,7 +220,9 @@
       <div id="attacksList"></div>
       <button class="secondary block" id="addAttackBtn">+ Добавить атаку</button>
     </div>
+    </div>
 
+    <div class="sheet-tab-panel" data-tab="info">
     <div class="card">
       <h3>Классовые умения <button type="button" class="expand-btn" data-target="sheetClassFeatures">⤢ Развернуть</button></h3>
       <div class="rich-toolbar" data-target="sheetClassFeatures"></div>
@@ -230,7 +240,9 @@
       <div class="rich-toolbar" data-target="sheetFeats"></div>
       <div class="rich-editable" id="sheetFeats" contenteditable="true" data-placeholder="Черты персонажа"></div>
     </div>
+    </div>
 
+    <div class="sheet-tab-panel" data-tab="inventory">
     <div class="card">
       <h3>Инвентарь</h3>
       <div id="sheetInventory"></div>
@@ -244,7 +256,9 @@
         <div><label>ПМ</label><input id="cPp" type="number" value="0"></div>
       </div>
     </div>
+    </div>
 
+    <div class="sheet-tab-panel" data-tab="magic">
     <div class="card">
       <h3>Заклинательство</h3>
       <label>Базовая характеристика</label>
@@ -285,7 +299,9 @@
       <div class="rich-toolbar" data-target="sheetSpells"></div>
       <div class="rich-editable" id="sheetSpells" contenteditable="true" data-placeholder="Способности класса, заговоры по расе и т.п."></div>
     </div>
+    </div>
 
+    <div class="sheet-tab-panel" data-tab="info">
     <div class="card">
       <h3>Внешность и предыстория</h3>
       <label style="display:flex;justify-content:space-between;align-items:center">Внешность <button type="button" class="expand-btn" data-target="sheetAppearance">⤢</button></label>
@@ -300,6 +316,7 @@
       <h3>Заметки <button type="button" class="expand-btn" data-target="sheetNotes">⤢ Развернуть</button></h3>
       <div class="rich-toolbar" data-target="sheetNotes"></div>
       <div class="rich-editable" id="sheetNotes" contenteditable="true" data-placeholder="Свободные заметки"></div>
+    </div>
     </div>
   </section>
 

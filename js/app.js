@@ -38,6 +38,7 @@ applyTheme();
 
 let currentCharId = null;
 let activeView = 'characters';
+let sheetActiveTab = 'combat'; // 'combat' | 'magic' | 'inventory' | 'info'
 let bestiaryFilter = 'Все';
 let bestiarySubtypeFilter = 'Все';
 let bestiaryCrFilter = 'Все';
@@ -97,6 +98,21 @@ function switchView(view) {
   if (view === 'battle') renderBattle();
   if (view === 'books') renderBooks();
 }
+
+// Переключение вкладок внутри Листа Персонажа (Бой/Магия/Инвентарь/Инфо) —
+// не путать с переключением видов (switchView) между разделами приложения.
+function switchSheetTab(tab) {
+  sheetActiveTab = tab;
+  document.querySelectorAll('.sheet-tab-panel').forEach(p => {
+    p.classList.toggle('active', p.dataset.tab === tab);
+  });
+  document.querySelectorAll('.sheet-tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+  });
+}
+document.querySelectorAll('.sheet-tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchSheetTab(btn.dataset.tab));
+});
 
 document.querySelectorAll('nav.tabbar button').forEach(btn => {
   btn.addEventListener('click', () => switchView(btn.dataset.view));
@@ -563,6 +579,7 @@ function migrateChar(c) {
 
 function openCharacter(id) {
   currentCharId = id;
+  switchSheetTab('combat');
   const c = migrateChar(getChar(id));
   if (!c.avatar) c.avatar = '🧙';
   document.getElementById('sheetName').value = c.name;

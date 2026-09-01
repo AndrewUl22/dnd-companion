@@ -667,6 +667,31 @@ button.block { width: 100%; margin-bottom: 8px; }
 .modal .close-x { background: none; border: none; color: var(--text-dim); font-size: 20px; cursor: pointer; }
 
 .chip-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 10px; }
+.sheet-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 4px 0 14px;
+}
+.sheet-tab-btn {
+  flex: 1;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  color: var(--text-dim);
+  border-radius: 10px;
+  padding: 9px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sheet-tab-btn.active {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+.sheet-tab-panel { display: none; }
+.sheet-tab-panel.active { display: block; }
 .chip {
   flex: none;
   background: var(--bg-elevated);
