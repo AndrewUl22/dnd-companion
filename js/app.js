@@ -831,7 +831,7 @@ function renderSaves(c) {
       const key = row.dataset.saveRow;
       const prof = !!c.saveProf[key];
       const total = mod(c.abilities[key]) + (prof ? (parseInt(c.prof) || 0) : 0);
-      quickRoll(total, labels[key] + ' (спасбросок)');
+      quickRoll(total, labels[key] + ' · Спасбросок');
     });
   });
 }
@@ -903,7 +903,7 @@ function renderAttacks(c) {
       const a = c.attacks[idx];
       if (!a) return;
       const bonus = parseInt(a.bonus) || 0;
-      quickRoll(bonus, a.name + ' (атака)');
+      quickRoll(bonus, a.name + ' · Атака');
     });
   });
 }
@@ -2564,7 +2564,7 @@ let diceAdvMode = 'none'; // 'none' | 'adv' | 'dis' — работает тол�
 function quickRoll(modifier, label) {
   const roll = 1 + Math.floor(Math.random() * 20);
   const total = roll + modifier;
-  const detail = modifier === 0 ? `${roll}` : `${roll} ${modifier > 0 ? '+' : '−'} ${Math.abs(modifier)}`;
+  const detail = modifier === 0 ? `${roll}` : `${roll}${modifier > 0 ? '+' : '−'}${Math.abs(modifier)}`;
   const isCrit = roll === 20;
   const isFail = roll === 1;
   const totalColor = isCrit ? '#3ddc73' : isFail ? '#e0503f' : 'var(--accent)';
