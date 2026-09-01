@@ -2573,26 +2573,42 @@ function openDiceRoller() {
 let diceModifier = 0;
 let diceAdvMode = 'none'; // 'none' | 'adv' | 'dis' — работает только для одиночного d20
 
-// Компактный попап быстрого броска для Листа Персонажа (хар-ки, спасброски,
-// навыки, атаки). Полностью независим от модалки "Кубики" и её SVG-архитектуры
-// (buildDieSvg/renderDieDisplay/animateDiceRoll) — сам считает d20+модификатор
-// и рисует свой маленький попап, поэтому ничего в основной вкладке дайсроллера
-// не трогает и не может сломаться вместе с ней.
+// Компактный попап результата броска — большая цифра по центру, мелкая
+// детализация ниже. Используется и для быстрых бросков в Листе Персонажа,
+// и после броска на вкладке «Кубики». Это свой отдельный, лёгкий оверлей
+// (без тёмной подложки, по центру экрана) — не общая модалка приложения,
+// поэтому появляется поверх чего угодно, включая уже открытую модалку
+// «Кубики», не закрывая и не пересоздавая её; SVG-архитектура кубиков
+// (buildDieSvg/renderDieDisplay/animateDiceRoll) этой функцией не затрагивается.
+function showRollResultPopup(label, rolls, modifier, opts) {
+  opts = opts || {};
+  const total = rolls.reduce((a, b) => a + b, 0) + modifier;
+  const rollsPart = rolls.join('+');
+  const modPart = modifier ? `${modifier > 0 ? '+' : '−'}${Math.abs(modifier)}` : '';
+  const detail = (rolls.length > 1 || modifier) ? `${rollsPart}${modPart}` : `${rolls[0]}`;
+  const totalColor = opts.crit ? '#3ddc73' : opts.fail ? '#e0503f' : 'var(--accent)';
+  document.getElementById('rollResultTitle').textContent = label.toUpperCase();
+  const totalEl = document.getElementById('rollResultTotal');
+  totalEl.textContent = total;
+  totalEl.style.color = totalColor;
+  document.getElementById('rollResultDetail').textContent = detail;
+  document.getElementById('rollResultOverlay').classList.remove('hidden');
+}
+function closeRollResultPopup() {
+  document.getElementById('rollResultOverlay').classList.add('hidden');
+}
+document.getElementById('rollResultClose').addEventListener('click', closeRollResultPopup);
+document.getElementById('rollResultOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'rollResultOverlay') closeRollResultPopup();
+});
+
+// Быстрый бросок для Листа Персонажа (хар-ки, спасброски, навыки, атаки) —
+// всегда d20 + модификатор, независимо от вкладки «Кубики».
 function quickRoll(modifier, label) {
   const roll = 1 + Math.floor(Math.random() * 20);
-  const total = roll + modifier;
-  const detail = modifier === 0 ? `${roll}` : `${roll}${modifier > 0 ? '+' : '−'}${Math.abs(modifier)}`;
-  const isCrit = roll === 20;
-  const isFail = roll === 1;
-  const totalColor = isCrit ? '#3ddc73' : isFail ? '#e0503f' : 'var(--accent)';
   playDiceRoll();
-  openModal(label.toUpperCase(), `
-    <div style="text-align:center;padding:6px 0 4px">
-      <div style="font-size:56px;font-weight:800;line-height:1;color:${totalColor}">${total}</div>
-      <div style="font-size:13px;color:var(--text-dim);margin-top:8px">${detail}</div>
-    </div>
-  `);
-  diceHistory.unshift({ label, total, rolls: [roll], mod: modifier });
+  showRollResultPopup(label, [roll], modifier, { crit: roll === 20, fail: roll === 1 });
+  diceHistory.unshift({ label, total: roll + modifier, rolls: [roll], mod: modifier });
 }
 
 function renderDiceModal() {
@@ -2689,10 +2705,11 @@ function renderDiceModal() {
     animateDiceRoll(total, () => {
       diceHistory.unshift({ label, total, rolls, mod: modifier });
       document.getElementById('diceHistoryList').innerHTML = diceHistory.slice(0, 12).map(h => `<div class="skill-row"><span>${h.label}</span><span class="mod">${h.total}${h.rolls.length > 1 || h.mod ? ' (' + h.rolls.join('+') + (h.mod ? (h.mod > 0 ? '+' + h.mod : h.mod) : '') + ')' : ''}</span></div>`).join('');
-      if (selectedDie === 20 && rolls.length === 1) {
-        if (rolls[0] === 20) triggerCritEffect('crit');
-        else if (rolls[0] === 1) triggerCritEffect('fail');
-      }
+      const isCrit = selectedDie === 20 && rolls.length === 1 && rolls[0] === 20;
+      const isFail = selectedDie === 20 && rolls.length === 1 && rolls[0] === 1;
+      if (isCrit) triggerCritEffect('crit');
+      else if (isFail) triggerCritEffect('fail');
+      showRollResultPopup(label, rolls, modifier, { crit: isCrit, fail: isFail });
     });
   });
 }

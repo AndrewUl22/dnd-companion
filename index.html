@@ -486,6 +486,18 @@
   </div>
 </div>
 
+<!-- Компактный плавающий попап результата броска — отдельный от общей модалки:
+     без тёмной подложки, по центру экрана, поверх чего угодно (включая
+     модалку "Кубики"), чтобы не перекрывать её содержимое нижним шитом -->
+<div class="roll-result-overlay hidden" id="rollResultOverlay">
+  <div class="roll-result-card">
+    <button class="roll-result-close" id="rollResultClose">✕</button>
+    <div class="roll-result-title" id="rollResultTitle"></div>
+    <div class="roll-result-total" id="rollResultTotal"></div>
+    <div class="roll-result-detail" id="rollResultDetail"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 
