@@ -575,7 +575,7 @@ button.block { width: 100%; margin-bottom: 8px; }
 .ability-box .label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; }
 .ability-box .score { font-size: 20px; font-weight: 700; margin: 2px 0; }
 .ability-box .mod { font-size: 12px; color: var(--accent); }
-.ability-box input { text-align: center; margin: 4px 0 0; padding: 4px; cursor: text; }
+.ability-box input { text-align: center; margin: 4px 0 0; padding: 4px; }
 
 .hp-track { display: flex; gap: 8px; align-items: center; }
 .hp-track input { text-align: center; }
@@ -702,7 +702,6 @@ button.block { width: 100%; margin-bottom: 8px; }
   font-size: 13px;
 }
 .skill-row .mod { color: var(--accent); font-weight: 600; }
-#skillsList .skill-row, #savesList .skill-row { cursor: pointer; }
 
 .toast {
   position: fixed;
