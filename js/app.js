@@ -2792,6 +2792,37 @@ renderCharList();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js').then((reg) => {
+      // Если уже нашёлся новый воркер, который просто ждёт активации —
+      // такое бывает, если вкладка была открыта долго и обновление подъехало
+      // в фоне — мягко подсказываем перезайти в приложение.
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
+            showToast('Доступна новая версия — перезапустите приложение');
+          }
+        });
+      });
+    }).catch(() => {});
   });
 }
+
+// Принудительная очистка кэша и переустановка сервис-воркера — на случай,
+// если телефон застрял на старой версии и не подхватывает обновления сам
+// (например, если вкладка PWA не закрывалась и не проверяла обновление).
+document.getElementById('forceUpdateBtn').addEventListener('click', async () => {
+  showToast('Обновляю…');
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  } catch (e) { /* всё равно перезагрузим ниже */ }
+  location.reload();
+});
