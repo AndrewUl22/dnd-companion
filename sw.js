@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dnd-companion-v43';
+const CACHE_NAME = 'dnd-companion-v44';
 const ASSETS = [
   './',
   './index.html',
@@ -42,6 +42,32 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  const isOwnAsset = url.origin === self.location.origin;
+
+  if (isOwnAsset) {
+    // Свои файлы (html/js/css/manifest/иконки) — "сеть, а не найдётся, кэш".
+    // Раньше здесь было наоборот ("кэш, а не найдётся — сеть"), из-за чего
+    // при онлайне приложение всё равно продолжало показывать старую
+    // закэшированную версию сколько угодно долго, пока кто-нибудь вручную не
+    // почистит кэш. Теперь, если есть сеть — всегда показываем актуальную
+    // версию и заодно обновляем кэш; офлайн по-прежнему работает через кэш.
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200 && event.request.method === 'GET') {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Чужие CDN-файлы (pdf.js, шрифты) — версии в URL фиксированы, поэтому
+  // безопасно и быстрее отдавать сразу из кэша, если он есть.
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
