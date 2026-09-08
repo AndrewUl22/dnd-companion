@@ -912,14 +912,18 @@ function renderAttacks(c) {
       if (btn.dataset.act === 'edit') openAttackForm(c, idx);
     });
   });
-  // Клик по строке атаки (кроме кнопок ✎/✕) — быстрый бросок атаки d20+бонус
+  // Клик по строке атаки (кроме кнопок ✎/✕) — быстрый бросок атаки d20+бонус.
+  // К ручному бонусу атаки прибавляется суммарный бонус от надетого снаряжения
+  // (оружие/предметы с "Бонус атаки" в инвентаре) — то же значение, что видно
+  // в строке "Бонус атаки от снаряжения" над списком атак.
   wrap.querySelectorAll('.inv-item[data-idx]').forEach(row => {
     row.addEventListener('click', () => {
       const c = getChar(currentCharId);
       const idx = parseInt(row.dataset.idx);
       const a = c.attacks[idx];
       if (!a) return;
-      const bonus = parseInt(a.bonus) || 0;
+      const gearBonus = (c.inventory || []).filter(i => i.equipped).reduce((sum, i) => sum + (i.atkBonus || 0), 0);
+      const bonus = (parseInt(a.bonus) || 0) + gearBonus;
       quickRoll(bonus, a.name + ' · Атака');
     });
   });
