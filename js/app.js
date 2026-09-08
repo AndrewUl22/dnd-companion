@@ -885,19 +885,42 @@ function renderDeathSaves(c) {
 }
 
 // ==================== ATTACKS ====================
+// Достаёт из строки "Урон и эффект" (например, "1к8+2 колющего" или
+// "3к6 псих урона") количество, тип кости и модификатор для броска урона.
+// Понимает и "к", и латинское "d/k" на случай, если кто-то впишет "1d8".
+// Возвращает null, если в начале строки нет распознаваемой дайс-нотации.
+function parseDiceNotation(str) {
+  if (!str) return null;
+  const m = String(str).match(/(\d+)\s*[кkKdD]\s*(\d+)\s*([+-]\s*\d+)?/);
+  if (!m) return null;
+  const count = parseInt(m[1]);
+  const sides = parseInt(m[2]);
+  if (!count || !sides) return null;
+  const modifier = m[3] ? parseInt(m[3].replace(/\s+/g, '')) : 0;
+  return { count, sides, modifier };
+}
+
 function renderAttacks(c) {
   const wrap = document.getElementById('attacksList');
   if (!c.attacks.length) {
     wrap.innerHTML = '<div class="empty-state" style="padding:16px 0">Атаки не добавлены</div>';
     return;
   }
+  const abilityAbbr = { str: 'Сил', dex: 'Лов', con: 'Тел', int: 'Инт', wis: 'Мдр', cha: 'Хар' };
+  // ability читаем с фолбэком на старое поле dmgAbility — для атак, сохранённых
+  // до того, как характеристику стали использовать и для попадания тоже.
+  const attackAbility = (a) => a.ability !== undefined ? a.ability : (a.dmgAbility || '');
+  const attackAbilityMod = (a) => { const ab = attackAbility(a); return ab ? mod(c.abilities[ab]) : 0; };
+  const gearAtkBonus = (c.inventory || []).filter(i => i.equipped).reduce((sum, i) => sum + (i.atkBonus || 0), 0);
+  const toHitBonus = (a) => attackAbilityMod(a) + (a.proficient ? (parseInt(c.prof) || 0) : 0) + (parseInt(a.bonus) || 0) + gearAtkBonus;
   wrap.innerHTML = c.attacks.map((a, idx) => `
     <div class="inv-item" data-idx="${idx}" style="cursor:pointer">
       <div>
         <div>${escapeHtml(a.name)}</div>
-        <div class="meta" style="color:var(--text-dim);font-size:11px">Бонус ${escapeHtml(a.bonus)} · ${escapeHtml(a.damage)}${a.notes ? ' · ' + escapeHtml(a.notes) : ''}</div>
+        <div class="meta" style="color:var(--text-dim);font-size:11px">Бонус ${fmtMod(toHitBonus(a))} · ${escapeHtml(a.damage)}${attackAbility(a) ? ' +' + abilityAbbr[attackAbility(a)] : ''}${a.notes ? ' · ' + escapeHtml(a.notes) : ''}</div>
       </div>
       <div class="row" style="flex:none;gap:4px">
+        <button data-idx="${idx}" data-act="dmg" class="secondary" style="padding:5px 8px;font-size:11px" title="Бросить урон">🎲</button>
         <button data-idx="${idx}" data-act="edit" class="secondary" style="padding:5px 8px;font-size:11px">✎</button>
         <button data-idx="${idx}" data-act="del">✕</button>
       </div>
@@ -910,21 +933,34 @@ function renderAttacks(c) {
       const idx = parseInt(btn.dataset.idx);
       if (btn.dataset.act === 'del') { c.attacks.splice(idx, 1); saveState(); renderAttacks(c); playChainClink(); }
       if (btn.dataset.act === 'edit') openAttackForm(c, idx);
+      if (btn.dataset.act === 'dmg') {
+        const a = c.attacks[idx];
+        if (!a) return;
+        const parsed = parseDiceNotation(a.damage);
+        if (!parsed) { showToast('Не удалось распознать урон — впишите как "1к8+2"'); return; }
+        // К броску урона прибавляется модификатор характеристики (той же,
+        // что и для попадания), поверх любого плоского модификатора, уже
+        // записанного в самой строке урона (например, бонус магического
+        // оружия "1к4+1"). Бонус мастерства на урон НЕ действует — только
+        // на попадание, как и по правилам.
+        const rolls = [];
+        for (let i = 0; i < parsed.count; i++) rolls.push(1 + Math.floor(Math.random() * parsed.sides));
+        playDiceRoll();
+        showRollResultPopup(a.name + ' · Урон', rolls, parsed.modifier + attackAbilityMod(a), {});
+      }
     });
   });
-  // Клик по строке атаки (кроме кнопок ✎/✕) — быстрый бросок атаки d20+бонус.
-  // К ручному бонусу атаки прибавляется суммарный бонус от надетого снаряжения
-  // (оружие/предметы с "Бонус атаки" в инвентаре) — то же значение, что видно
-  // в строке "Бонус атаки от снаряжения" над списком атак.
+  // Клик по строке атаки (кроме кнопок 🎲/✎/✕) — быстрый бросок атаки d20 +
+  // модификатор характеристики + бонус мастерства (если есть владение) +
+  // доп. бонус, вписанный вручную + суммарный бонус атаки от надетого
+  // снаряжения (оружие/предметы с "Бонус атаки" в инвентаре).
   wrap.querySelectorAll('.inv-item[data-idx]').forEach(row => {
     row.addEventListener('click', () => {
       const c = getChar(currentCharId);
       const idx = parseInt(row.dataset.idx);
       const a = c.attacks[idx];
       if (!a) return;
-      const gearBonus = (c.inventory || []).filter(i => i.equipped).reduce((sum, i) => sum + (i.atkBonus || 0), 0);
-      const bonus = (parseInt(a.bonus) || 0) + gearBonus;
-      quickRoll(bonus, a.name + ' · Атака');
+      quickRoll(toHitBonus(a), a.name + ' · Атака');
     });
   });
 }
@@ -933,11 +969,18 @@ document.getElementById('addAttackBtn').addEventListener('click', () => openAtta
 
 function openAttackForm(c, idx) {
   const existing = idx !== undefined ? c.attacks[idx] : null;
-  const a = existing || { name: '', bonus: '+0', damage: '', notes: '' };
+  const a = existing || { name: '', bonus: '+0', damage: '', ability: '', proficient: false, notes: '' };
+  const ability = a.ability !== undefined ? a.ability : (a.dmgAbility || ''); // старое поле dmgAbility — для совместимости со старыми сохранениями
+  const abilityOptions = [['', 'Не добавлять'], ['str', 'Сила'], ['dex', 'Ловкость'], ['con', 'Телосложение'], ['int', 'Интеллект'], ['wis', 'Мудрость'], ['cha', 'Харизма']]
+    .map(([val, label]) => `<option value="${val}" ${ability === val ? 'selected' : ''}>${label}</option>`).join('');
   openModal(existing ? 'Редактировать атаку' : 'Новая атака', `
     <label>Название</label><input id="atkName" value="${escapeAttr(a.name)}" placeholder="Длинный меч">
-    <label>Бонус атаки/СЛ</label><input id="atkBonus" value="${escapeAttr(a.bonus)}" placeholder="+5">
-    <label>Урон и эффект</label><input id="atkDamage" value="${escapeAttr(a.damage)}" placeholder="1к8+3 рубящего">
+    <label>Характеристика <span style="color:var(--text-dim);font-weight:400">(для попадания и урона — Ловкость для кинжала, Сила для меча и т.п.)</span></label>
+    <select id="atkAbility">${abilityOptions}</select>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="checkbox" id="atkProficient" style="width:auto" ${a.proficient ? 'checked' : ''}> Есть владение этим оружием (+ бонус мастерства)</label>
+    <label>Доп. бонус атаки/СЛ <span style="color:var(--text-dim);font-weight:400">(магическое оружие, черты и т.п. — сверх характеристики и владения)</span></label>
+    <input id="atkBonus" value="${escapeAttr(a.bonus)}" placeholder="+0">
+    <label>Урон и эффект</label><input id="atkDamage" value="${escapeAttr(a.damage)}" placeholder="1к8 рубящего">
     <label>Заметки</label><input id="atkNotes" value="${escapeAttr(a.notes)}">
     <button class="primary block" id="saveAttack">Сохранить</button>
   `);
@@ -946,6 +989,8 @@ function openAttackForm(c, idx) {
       name: document.getElementById('atkName').value.trim() || 'Атака',
       bonus: document.getElementById('atkBonus').value.trim(),
       damage: document.getElementById('atkDamage').value.trim(),
+      ability: document.getElementById('atkAbility').value,
+      proficient: document.getElementById('atkProficient').checked,
       notes: document.getElementById('atkNotes').value.trim()
     };
     if (existing) c.attacks[idx] = newA; else c.attacks.push(newA);
