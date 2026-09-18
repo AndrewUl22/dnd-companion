@@ -526,6 +526,44 @@ input[type="checkbox"]:checked::after {
   100% { transform: scale(1) rotate(0deg); }
 }
 
+/* Трёхпозиционный переключатель владения навыком: пусто -> владение (✓) ->
+   компетенция (★, двойной бонус мастерства). Тот же язык, что и у обычных
+   чекбоксов выше, только с третьим состоянием поверх. */
+.skill-state {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-radius: 7px;
+  border: 2px solid var(--card-border);
+  background: var(--bg-elevated);
+  position: relative;
+  cursor: pointer;
+  margin: 0 6px 0 0;
+  padding: 0;
+  vertical-align: middle;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: #1b1530;
+  transition: transform .18s cubic-bezier(.4,1.8,.6,1), background .15s ease, border-color .12s ease, box-shadow .15s ease;
+}
+.skill-state:active { transform: scale(0.6); }
+.skill-state.prof {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.skill-state.expertise {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent);
+}
+
 /* ===== Анимация "приседания" на ховер/тап для интерактивных элементов ===== */
 button, .list-item, .chip, .equip-btn, .death-dot, .avatar-circle {
   transition: transform .12s ease, filter .12s ease, box-shadow .12s ease;

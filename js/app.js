@@ -63,6 +63,25 @@ function mod(score) {
   return Math.floor((score - 10) / 2);
 }
 
+// Базовое значение характеристики (то, что вписано в саму хар-ку) плюс сумма
+// бонусов от ВСЕХ надетых предметов инвентаря, у которых выставлен "Бонус к
+// характеристике" именно на эту характеристику (например, кольцо +2 Силы).
+// Используется везде, где считается модификатор характеристики — проверки,
+// спасброски, навыки, инициатива, КД, заклинательство, атаки — так что
+// экипировка реально влияет на итоговые цифры персонажа, а не только на
+// отображаемое число в самой хар-ке (которое остаётся редактируемым базовым
+// значением).
+function getAbilityScore(c, key) {
+  const base = (c.abilities && c.abilities[key]) || 0;
+  const bonus = (c.inventory || [])
+    .filter(i => i.equipped && i.abilityBonus && i.abilityBonus.ability === key)
+    .reduce((sum, i) => sum + (parseInt(i.abilityBonus.amount) || 0), 0);
+  return base + bonus;
+}
+function getAbilityMod(c, key) {
+  return mod(getAbilityScore(c, key));
+}
+
 function fmtMod(m) {
   return (m >= 0 ? '+' : '') + m;
 }
@@ -555,6 +574,8 @@ function migrateChar(c) {
   if (!c.deathSaves) c.deathSaves = { successes: 0, failures: 0 };
   if (!c.saveProf) c.saveProf = { str: false, dex: false, con: false, int: false, wis: false, cha: false };
   if (!c.skillProf) c.skillProf = {};
+  if (!c.skillExpertise) c.skillExpertise = {};
+  if (c.trinkets === undefined) c.trinkets = '';
   if (!c.armorProf) c.armorProf = { light: false, medium: false, heavy: false, shield: false };
   if (c.weaponProf === undefined) c.weaponProf = '';
   if (c.toolProf === undefined) c.toolProf = '';
@@ -616,6 +637,7 @@ function openCharacter(id) {
   document.getElementById('sheetBackstory').innerHTML = c.backstory || '';
   document.getElementById('sheetSpells').innerHTML = c.spells || '';
   document.getElementById('sheetNotes').innerHTML = c.notes || '';
+  document.getElementById('sheetTrinkets').value = c.trinkets || '';
   document.getElementById('cCp').value = c.currency.cp;
   document.getElementById('cSp').value = c.currency.sp;
   document.getElementById('cEp').value = c.currency.ep;
@@ -643,16 +665,18 @@ function openCharacter(id) {
 
 function updateComputedStats(c) {
   const initEl = document.getElementById('initiativeDisplay');
-  if (initEl) initEl.textContent = fmtMod(mod(c.abilities.dex));
+  if (initEl) initEl.textContent = fmtMod(getAbilityMod(c, 'dex'));
   const perc = SKILL_LIST.find(s => s.name === 'Восприятие');
-  const passive = 10 + mod(c.abilities[perc.ability]) + (c.skillProf['Восприятие'] ? (parseInt(c.prof) || 0) : 0);
+  const percExpertise = !!(c.skillExpertise && c.skillExpertise['Восприятие']);
+  const percMult = percExpertise ? 2 : (c.skillProf['Восприятие'] ? 1 : 0);
+  const passive = 10 + getAbilityMod(c, perc.ability) + percMult * (parseInt(c.prof) || 0);
   const passEl = document.getElementById('passivePerceptionDisplay');
   if (passEl) passEl.textContent = passive;
 }
 
 function updateSpellcastingStats(c) {
   const ability = c.spellcastingAbility;
-  const spellMod = ability ? mod(c.abilities[ability]) : 0;
+  const spellMod = ability ? getAbilityMod(c, ability) : 0;
   const prof = parseInt(c.prof) || 0;
   document.getElementById('spellModDisplay').textContent = fmtMod(spellMod);
   document.getElementById('spellDcDisplay').textContent = ability ? (8 + prof + spellMod) : '—';
@@ -786,14 +810,18 @@ function renderCharColorSwatches(c) {
 function renderAbilityGrid(c) {
   const grid = document.getElementById('abilityGrid');
   const labels = { str: 'Сила', dex: 'Ловкость', con: 'Телослож.', int: 'Интеллект', wis: 'Мудрость', cha: 'Харизма' };
-  grid.innerHTML = Object.keys(labels).map(k => `
+  grid.innerHTML = Object.keys(labels).map(k => {
+    const base = c.abilities[k];
+    const eff = getAbilityScore(c, k);
+    return `
     <div class="ability-box" data-key="${k}">
       <div class="label">${labels[k]}</div>
-      <div class="score">${c.abilities[k]}</div>
-      <div class="mod">${fmtMod(mod(c.abilities[k]))}</div>
-      <input type="number" data-ability="${k}" value="${c.abilities[k]}">
+      <div class="score">${eff}${eff !== base ? `<span style="font-size:10px;color:var(--text-dim)"> (баз. ${base})</span>` : ''}</div>
+      <div class="mod">${fmtMod(getAbilityMod(c, k))}</div>
+      <input type="number" data-ability="${k}" value="${base}">
     </div>
-  `).join('');
+  `;
+  }).join('');
   grid.querySelectorAll('input').forEach(inp => {
     // ВАЖНО: обновляем только текст соседних элементов, не пересоздаём инпуты —
     // иначе на мобильных клавиатура схлопывается при каждом нажатии клавиши.
@@ -804,8 +832,9 @@ function renderAbilityGrid(c) {
       c.abilities[key] = isNaN(val) ? 0 : val;
       saveState();
       const box = inp.closest('.ability-box');
-      box.querySelector('.score').textContent = c.abilities[key];
-      box.querySelector('.mod').textContent = fmtMod(mod(c.abilities[key]));
+      const eff = getAbilityScore(c, key);
+      box.querySelector('.score').innerHTML = `${eff}${eff !== c.abilities[key] ? `<span style="font-size:10px;color:var(--text-dim)"> (баз. ${c.abilities[key]})</span>` : ''}`;
+      box.querySelector('.mod').textContent = fmtMod(getAbilityMod(c, key));
       renderSkills(c);
       renderSaves(c);
       updateComputedStats(c);
@@ -819,7 +848,7 @@ function renderAbilityGrid(c) {
       if (e.target.tagName === 'INPUT') return;
       const c = getChar(currentCharId);
       const key = box.dataset.key;
-      quickRoll(mod(c.abilities[key]), labels[key]);
+      quickRoll(getAbilityMod(c, key), labels[key]);
     });
   });
 }
@@ -829,7 +858,7 @@ function renderSaves(c) {
   const labels = { str: 'Сила', dex: 'Ловкость', con: 'Телосложение', int: 'Интеллект', wis: 'Мудрость', cha: 'Харизма' };
   wrap.innerHTML = Object.keys(labels).map(k => {
     const prof = !!c.saveProf[k];
-    const total = mod(c.abilities[k]) + (prof ? (parseInt(c.prof) || 0) : 0);
+    const total = getAbilityMod(c, k) + (prof ? (parseInt(c.prof) || 0) : 0);
     return `<div class="skill-row" data-save-row="${k}" style="cursor:pointer"><span><input type="checkbox" data-save="${k}" ${prof ? 'checked' : ''} style="width:auto;margin-right:6px;vertical-align:middle">${labels[k]}</span><span class="mod">${fmtMod(total)}</span></div>`;
   }).join('');
   wrap.querySelectorAll('input[data-save]').forEach(chk => {
@@ -847,7 +876,7 @@ function renderSaves(c) {
       const c = getChar(currentCharId);
       const key = row.dataset.saveRow;
       const prof = !!c.saveProf[key];
-      const total = mod(c.abilities[key]) + (prof ? (parseInt(c.prof) || 0) : 0);
+      const total = getAbilityMod(c, key) + (prof ? (parseInt(c.prof) || 0) : 0);
       quickRoll(total, labels[key] + ' · Спасбросок');
     });
   });
@@ -910,7 +939,7 @@ function renderAttacks(c) {
   // ability читаем с фолбэком на старое поле dmgAbility — для атак, сохранённых
   // до того, как характеристику стали использовать и для попадания тоже.
   const attackAbility = (a) => a.ability !== undefined ? a.ability : (a.dmgAbility || '');
-  const attackAbilityMod = (a) => { const ab = attackAbility(a); return ab ? mod(c.abilities[ab]) : 0; };
+  const attackAbilityMod = (a) => { const ab = attackAbility(a); return ab ? getAbilityMod(c, ab) : 0; };
   const gearAtkBonus = (c.inventory || []).filter(i => i.equipped).reduce((sum, i) => sum + (i.atkBonus || 0), 0);
   const toHitBonus = (a) => attackAbilityMod(a) + (a.proficient ? (parseInt(c.prof) || 0) : 0) + (parseInt(a.bonus) || 0) + gearAtkBonus;
   wrap.innerHTML = c.attacks.map((a, idx) => `
@@ -1002,29 +1031,48 @@ function openAttackForm(c, idx) {
 
 function renderSkills(c) {
   const list = document.getElementById('skillsList');
+  if (!c.skillExpertise) c.skillExpertise = {};
   list.innerHTML = SKILL_LIST.map(s => {
     const prof = !!c.skillProf[s.name];
-    const total = mod(c.abilities[s.ability]) + (prof ? (parseInt(c.prof) || 0) : 0);
-    return `<div class="skill-row" data-skill-row="${escapeAttr(s.name)}" style="cursor:pointer"><span><input type="checkbox" data-skill="${escapeAttr(s.name)}" ${prof ? 'checked' : ''} style="width:auto;margin-right:6px;vertical-align:middle">${s.name} <span style="color:var(--text-dim);font-size:11px">(${s.ability})</span></span><span class="mod">${fmtMod(total)}</span></div>`;
+    const expertise = !!c.skillExpertise[s.name];
+    const profBonus = parseInt(c.prof) || 0;
+    const mult = expertise ? 2 : (prof ? 1 : 0);
+    const total = getAbilityMod(c, s.ability) + profBonus * mult;
+    const stateClass = expertise ? 'skill-state expertise' : (prof ? 'skill-state prof' : 'skill-state');
+    const stateIcon = expertise ? '★' : (prof ? '✓' : '');
+    const title = expertise ? 'Компетенция (х2 бонуса мастерства)' : prof ? 'Владение' : 'Нет владения';
+    return `<div class="skill-row" data-skill-row="${escapeAttr(s.name)}" style="cursor:pointer"><span><button type="button" class="${stateClass}" data-skill-toggle="${escapeAttr(s.name)}" title="${title}">${stateIcon}</button>${s.name} <span style="color:var(--text-dim);font-size:11px">(${s.ability})</span></span><span class="mod">${fmtMod(total)}</span></div>`;
   }).join('');
-  list.querySelectorAll('input[data-skill]').forEach(chk => {
-    chk.addEventListener('change', () => {
+  // Клик по кружку владения циклит состояния: пусто -> владение (✓) ->
+  // компетенция (★, двойной бонус мастерства) -> снова пусто.
+  list.querySelectorAll('[data-skill-toggle]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       const c = getChar(currentCharId);
-      c.skillProf[chk.dataset.skill] = chk.checked;
+      if (!c.skillExpertise) c.skillExpertise = {};
+      const name = btn.dataset.skillToggle;
+      const prof = !!c.skillProf[name];
+      const expertise = !!c.skillExpertise[name];
+      if (!prof && !expertise) { c.skillProf[name] = true; }
+      else if (prof && !expertise) { c.skillExpertise[name] = true; }
+      else { c.skillProf[name] = false; c.skillExpertise[name] = false; }
       saveState();
       renderSkills(c);
       updateComputedStats(c);
     });
   });
-  // Клик по строке (кроме чекбокса владения) — быстрый бросок навыка d20+модификатор
+  // Клик по строке (кроме кружка владения) — быстрый бросок навыка d20+модификатор
   list.querySelectorAll('.skill-row[data-skill-row]').forEach(row => {
     row.addEventListener('click', (e) => {
-      if (e.target.tagName === 'INPUT') return;
+      if (e.target.closest('[data-skill-toggle]')) return;
       const c = getChar(currentCharId);
       const s = SKILL_LIST.find(x => x.name === row.dataset.skillRow);
       if (!s) return;
       const prof = !!c.skillProf[s.name];
-      const total = mod(c.abilities[s.ability]) + (prof ? (parseInt(c.prof) || 0) : 0);
+      const expertise = !!(c.skillExpertise && c.skillExpertise[s.name]);
+      const profBonus = parseInt(c.prof) || 0;
+      const mult = expertise ? 2 : (prof ? 1 : 0);
+      const total = getAbilityMod(c, s.ability) + profBonus * mult;
       quickRoll(total, s.name);
     });
   });
@@ -1039,13 +1087,15 @@ function renderInventory(c) {
   }
   wrap.innerHTML = c.inventory.map((it, idx) => {
     const slot = it.armorSlot || (it.acBonus ? 'flat' : 'none'); // обратная совместимость со старыми записями
-    const canEquip = slot !== 'none' || !!it.atkBonus;
+    const hasAbilityBonus = !!(it.abilityBonus && it.abilityBonus.ability && it.abilityBonus.amount);
+    const canEquip = slot !== 'none' || !!it.atkBonus || hasAbilityBonus;
     const bonusParts = [];
     if (slot === 'light') bonusParts.push('КД ' + (it.armorBaseAC || 0) + '+Лов');
     else if (slot === 'medium') bonusParts.push('КД ' + (it.armorBaseAC || 0) + '+Лов(макс2)');
     else if (slot === 'heavy') bonusParts.push('КД ' + (it.armorBaseAC || 0));
     else if (slot === 'flat' && it.acBonus) bonusParts.push('КД +' + it.acBonus);
     if (it.atkBonus) bonusParts.push('Атака +' + it.atkBonus);
+    if (hasAbilityBonus) bonusParts.push({ str: 'Сил', dex: 'Лов', con: 'Тел', int: 'Инт', wis: 'Мдр', cha: 'Хар' }[it.abilityBonus.ability] + ' +' + it.abilityBonus.amount);
     return `
     <div class="inv-item">
       <div>
@@ -1072,6 +1122,16 @@ function renderInventory(c) {
       if (btn.dataset.act === 'equip') c.inventory[idx].equipped = !c.inventory[idx].equipped;
       saveState();
       renderInventory(c);
+      if (btn.dataset.act === 'equip' || btn.dataset.act === 'del') {
+        // Экипировка/снятие/удаление предмета с "Бонусом к характеристике"
+        // меняет эффективные хар-ки персонажа — пересчитываем всё, что от
+        // них зависит, сразу же, а не только при следующем открытии листа.
+        renderAbilityGrid(c);
+        renderSaves(c);
+        renderSkills(c);
+        updateComputedStats(c);
+        updateSpellcastingStats(c);
+      }
     });
   });
   updateTotalAC(c);
@@ -1081,7 +1141,7 @@ const ARMOR_DEX_CAP = { light: Infinity, medium: 2, heavy: 0 };
 
 function updateTotalAC(c) {
   const equipped = (c.inventory || []).filter(i => i.equipped);
-  const dexMod = mod(c.abilities.dex);
+  const dexMod = getAbilityMod(c, 'dex');
   // Надетая базовая броня (лёгкая/средняя/тяжёлая) заменяет ручной "Базовый КД", а не складывается с ним
   const bodyArmor = equipped.find(i => ['light', 'medium', 'heavy'].includes(i.armorSlot));
   let baseAC;
@@ -1111,7 +1171,7 @@ document.getElementById('addInvFromCatalog').addEventListener('click', () => {
       const c = getChar(currentCharId);
       const existing = c.inventory.find(i => i.itemId === item.id);
       if (existing) existing.qty++;
-      else c.inventory.push({ itemId: item.id, name: item.name, type: item.type, subtype: item.subtype || '', qty: 1, armorSlot: item.armorSlot || 'none', armorBaseAC: item.armorBaseAC || 0, acBonus: item.acBonus || 0, atkBonus: item.atkBonus || 0, equipped: false });
+      else c.inventory.push({ itemId: item.id, name: item.name, type: item.type, subtype: item.subtype || '', qty: 1, armorSlot: item.armorSlot || 'none', armorBaseAC: item.armorBaseAC || 0, acBonus: item.acBonus || 0, atkBonus: item.atkBonus || 0, abilityBonus: item.abilityBonus || null, equipped: false });
       saveState();
       renderInventory(c);
     },
@@ -1304,6 +1364,10 @@ document.getElementById('sheetSize').addEventListener('change', (e) => {
 });
 document.getElementById('sheetInspiration').addEventListener('change', (e) => {
   getChar(currentCharId).inspiration = e.target.checked;
+  saveState();
+});
+document.getElementById('sheetTrinkets').addEventListener('input', (e) => {
+  getChar(currentCharId).trinkets = e.target.value;
   saveState();
 });
 ['cCp', 'cSp', 'cEp', 'cGp', 'cPp'].forEach((elId) => {
@@ -1943,11 +2007,14 @@ function openItemDetail(id) {
 
 
 function openItemForm(existing) {
-  const it = existing || { id: uid('i'), name: '', type: '', subtype: '', weight: '', cost: '', properties: '', armorSlot: 'none', armorBaseAC: 0, acBonus: 0, atkBonus: 0, rarity: 'Обычный', avatar: '', custom: true };
+  const it = existing || { id: uid('i'), name: '', type: '', subtype: '', weight: '', cost: '', properties: '', armorSlot: 'none', armorBaseAC: 0, acBonus: 0, atkBonus: 0, abilityBonus: { ability: '', amount: 0 }, rarity: 'Обычный', avatar: '', custom: true };
   if (!it.rarity) it.rarity = 'Обычный';
   if (!it.armorSlot) it.armorSlot = it.acBonus ? 'flat' : 'none'; // обратная совместимость со старыми предметами
+  if (!it.abilityBonus) it.abilityBonus = { ability: '', amount: 0 };
   const rarityOptions = RARITIES.map(r => `<option ${r === it.rarity ? 'selected' : ''}>${r}</option>`).join('');
   const armorSlotOptions = ARMOR_SLOTS.map(s => `<option value="${s.id}" ${s.id === it.armorSlot ? 'selected' : ''}>${s.label}</option>`).join('');
+  const abilityBonusOptions = [['', 'Нет'], ['str', 'Сила'], ['dex', 'Ловкость'], ['con', 'Телосложение'], ['int', 'Интеллект'], ['wis', 'Мудрость'], ['cha', 'Харизма']]
+    .map(([val, label]) => `<option value="${val}" ${it.abilityBonus.ability === val ? 'selected' : ''}>${label}</option>`).join('');
   openModal(existing ? 'Редактировать предмет' : 'Новый предмет', `
     <div style="text-align:center;margin-bottom:10px">${avatarPickerHtml('itAvatar', it, defaultItemEmoji(it.name, it.type), true)}</div>
     <label>Название</label><input id="itName" value="${escapeAttr(it.name)}">
@@ -1970,6 +2037,11 @@ function openItemForm(existing) {
     <div class="row">
       <div><label>Бонус к атаке (для оружия)</label><input id="itAtkBonus" type="number" value="${it.atkBonus || 0}"></div>
     </div>
+    <label>Бонус к характеристике <span style="color:var(--text-dim);font-weight:400">(действует, пока предмет экипирован)</span></label>
+    <div class="row">
+      <div><label>Характеристика</label><select id="itAbilityBonusKey">${abilityBonusOptions}</select></div>
+      <div><label>Величина</label><input id="itAbilityBonusAmount" type="number" value="${it.abilityBonus.amount || 0}" placeholder="+1"></div>
+    </div>
     <label>Свойства / описание</label><textarea id="itProps">${escapeHtml(it.properties)}</textarea>
     <button class="primary block" id="saveItem">Сохранить</button>
   `);
@@ -1991,6 +2063,7 @@ function openItemForm(existing) {
     it.armorBaseAC = parseInt(document.getElementById('itArmorBaseAC').value) || 0;
     it.acBonus = parseInt(document.getElementById('itAcBonus').value) || 0;
     it.atkBonus = parseInt(document.getElementById('itAtkBonus').value) || 0;
+    it.abilityBonus = { ability: document.getElementById('itAbilityBonusKey').value, amount: parseInt(document.getElementById('itAbilityBonusAmount').value) || 0 };
     it.avatar = it.avatar || defaultItemEmoji(document.getElementById('itName').value.trim(), document.getElementById('itType').value.trim());
     it.properties = document.getElementById('itProps').value;
     it.custom = true;

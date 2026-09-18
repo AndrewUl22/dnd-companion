@@ -1,182 +1,198 @@
-# DnD Companion — веб-приложение (PWA)
+**EN** | [RU](README.ru.md)
 
-Полностью рабочее приложение: листы персонажей, бестиарий, предметы,
-добавление своего контента, импорт/экспорт. Открывается в браузере телефона
-и устанавливается на Android как обычное приложение (иконка на рабочем столе,
-работает офлайн).
+# DnD Companion — web app (PWA)
 
-## Как открыть и установить на Android
+A fully working app: character sheets, bestiary, items, custom content,
+import/export. Opens in your phone's browser and installs on Android like
+a regular app (home screen icon, works offline).
 
-Файлы нужно разместить где-то с https (сервис-воркер и установка PWA
-требуют https или localhost — просто открыть index.html двойным кликом
-не даст офлайн-режим и кнопку установки).
+## How to open and install on Android
 
-Проще всего — GitHub Pages:
+The files need to be hosted somewhere over https (the service worker and PWA
+installation require https or localhost — just double-clicking index.html
+won't give you offline mode or the install button).
 
-1. Создайте новый репозиторий на GitHub, загрузите туда все файлы из этой папки
-   (сохраняя структуру: index.html, manifest.json, sw.js, css/, js/, icons/).
-2. В настройках репозитория включите **Settings → Pages → Deploy from branch → main**.
-3. Через минуту сайт появится по адресу вида
-   `https://ВАШ_НИК.github.io/НАЗВАНИЕ_РЕПО/`.
-4. Откройте эту ссылку на телефоне в Chrome → меню (три точки) →
-   **«Установить приложение»** / **«Добавить на главный экран»**.
+The easiest option is GitHub Pages:
 
-Альтернативы: Netlify Drop (netlify.com/drop — просто перетащить папку),
-Vercel, Cloudflare Pages — любой бесплатный статический хостинг подойдёт.
+1. Create a new repository on GitHub and upload all the files from this
+   folder (keeping the structure: index.html, manifest.json, sw.js, css/,
+   js/, icons/).
+2. In the repository settings, enable **Settings → Pages → Deploy from
+   branch → main**.
+3. After a minute the site will appear at an address like
+   `https://YOUR_USERNAME.github.io/REPO_NAME/`.
+4. Open that link on your phone in Chrome → menu (three dots) →
+   **"Install app"** / **"Add to Home screen"**.
 
-## Как превратить это в .apk файл
+Alternatives: Netlify Drop (netlify.com/drop — just drag the folder in),
+Vercel, Cloudflare Pages — any free static hosting works.
 
-Если нужен именно файл .apk (например, чтобы раздавать напрямую, без хостинга),
-есть готовые инструменты, которые оборачивают PWA в apk:
+## How to turn this into an .apk file
 
-- **PWABuilder** (pwabuilder.com) — вставляете ссылку на ваш опубликованный сайт,
-  он генерирует подписанный .apk/.aab. Самый простой способ.
-- **Bubblewrap** (Google, консольный инструмент) — то же самое, но локально.
+If you specifically need an .apk file (e.g. to distribute directly, without
+hosting), there are ready-made tools that wrap a PWA into an apk:
 
-## Структура проекта
+- **PWABuilder** (pwabuilder.com) — paste the link to your published site,
+  it generates a signed .apk/.aab. The simplest option.
+- **Bubblewrap** (Google, command-line tool) — the same thing, but locally.
+
+## Project structure
 
 ```
-index.html        — разметка приложения
-manifest.json      — метаданные для установки как приложение
-sw.js               — офлайн-кэширование
-css/style.css       — стили
-js/data.js          — стартовые данные (расы, классы, бестиарий, предметы, заклинания)
-js/app.js           — вся логика приложения
-js/sounds.js        — синтезированные звуковые эффекты (без внешних файлов)
-icons/              — иконки приложения и картинка для заставки
+index.html        — app markup
+manifest.json      — metadata for installing as an app
+sw.js               — offline caching
+css/style.css       — styles
+js/data.js          — starting data (races, classes, bestiary, items, spells)
+js/app.js           — all the app logic
+js/sounds.js        — synthesized sound effects (no external files)
+icons/              — app icons and the splash-screen image
 ```
 
-## Данные и хранение
+## Data and storage
 
-Всё (персонажи, добавленные существа, предметы и заклинания, включая
-загруженные фото) хранится локально на устройстве (localStorage). Раздел
-**Настройки → Импорт/Экспорт** позволяет сохранить всё в один .json файл —
-для переноса на другое устройство или как бэкап. Видео- и GIF-аватарки
-(персонажей, существ и предметов), как и PDF-книги, хранятся отдельно, в
-IndexedDB — они не входят в .json экспорт из-за размера, переносятся
-только вместе со всем браузером/профилем.
+Everything (characters, added creatures, items and spells, including
+uploaded photos) is stored locally on the device (localStorage). The
+**Settings → Import/Export** section lets you save everything into a single
+.json file — for moving to another device or as a backup. Video and GIF
+avatars (for characters, creatures and items), as well as PDF rulebooks,
+are stored separately, in IndexedDB — they aren't included in the .json
+export because of their size, and only carry over together with the whole
+browser/profile.
 
-## Обновление приложения
+## Updating the app
 
-Приложение — PWA с офлайн-кэшированием (`sw.js`), поэтому после публикации
-новой версии на хостинге телефон может какое-то время показывать старую
-версию из кэша. Признак этого — вы точно знаете, что были правки, а в
-приложении их не видно.
+The app is a PWA with offline caching (`sw.js`), so after a new version is
+published on the hosting, the phone may keep showing the old cached version
+for a while. The sign of this: you know for sure there were changes, but
+the app doesn't show them.
 
-Если новая версия подхватилась в фоне сама (пока вкладка была открыта),
-приложение покажет тост «Доступна новая версия — перезапустите приложение» —
-достаточно просто закрыть и снова открыть вкладку/PWA.
+If a new version picks itself up in the background (while the tab was
+open), the app shows a toast: "A new version is available — restart the
+app" — just close and reopen the tab/PWA.
 
-Если этого не произошло, в **Настройки → Обновление приложения** есть кнопка
-**«🔄 Обновить приложение (очистить кэш)»** — она снимает регистрацию
-сервис-воркера, полностью стирает кэш приложения и перезагружает страницу,
-после чего браузер заново скачивает всё с сервера. Это самый надёжный
-способ форсировать обновление в один тап, без переустановки PWA.
+If that didn't happen, **Settings → App update** has a
+**"🔄 Update app (clear cache)"** button — it unregisters the service
+worker, completely wipes the app's cache and reloads the page, after which
+the browser re-downloads everything from the server. This is the most
+reliable way to force an update in one tap, without reinstalling the PWA.
 
-При каждой правке файлов версия кэша (`CACHE_NAME` в `sw.js`) поднимается —
-без этого сервис-воркер вообще не заметит, что что-то изменилось.
+Every time the files are edited, the cache version (`CACHE_NAME` in
+`sw.js`) gets bumped — without that, the service worker won't notice
+anything changed at all.
 
-Сам сервис-воркер работает по стратегии «сеть, а если её нет — кэш»: если
-телефон онлайн, при каждом открытии подтягивается актуальная версия сайта
-и сама обновляет кэш; офлайн-режим по-прежнему работает через сохранённую
-копию. Это должно свести случаи «открыл — а изменений нет» почти к нулю.
+The service worker itself uses a "network, falling back to cache" strategy:
+if the phone is online, every time you open the app it fetches the current
+version of the site and updates the cache along the way; offline mode still
+works through the saved copy. This should bring the "I opened it — no
+changes" case down to almost zero.
 
-### Если приложение установлено на Android через «Установить» (WebAPK)
+### If the app is installed on Android via "Install" (WebAPK)
 
-Способ, которым вы добавили сайт на экран, важен:
-- **«Добавить на главный экран» как обычный ярлык** — открывает сайт в
-  Chrome как обычную вкладку, обновления подтягиваются как в браузере.
-- **«Установить приложение»** — Android оборачивает сайт в отдельный
-  WebAPK со своим изолированным хранилищем. У него **свой собственный,
-  более редкий цикл проверки обновлений** (может проверять раз в
-  несколько дней) — это ограничение самого Android/Chrome, не приложения.
+The way you added the site to your screen matters:
+- **"Add to Home screen" as a plain shortcut** — opens the site in Chrome
+  as a regular tab, updates get picked up like in the browser.
+- **"Install app"** — Android wraps the site into a separate WebAPK with
+  its own isolated storage. It has **its own, much less frequent update
+  check cycle** (it may only check every few days) — this is a limitation
+  of Android/Chrome itself, not of the app.
 
-Если после установки именно вторым способом приложение всё равно застряло
-на старой версии, самый быстрый способ форснуть проверку:
-1. В адресной строке Chrome откройте `chrome://webapks`, найдите
-   приложение в списке и нажмите «Check for update» / «Проверить
-   обновление».
-2. Либо: Настройки Android → Приложения → найти установленное приложение →
-   Память/Хранилище → «Очистить кэш» (или «Очистить хранилище») → снова
-   открыть приложение с экрана.
-3. Либо переустановить: удалить значок с экрана и заново открыть сайт в
-   Chrome → «Установить приложение».
+If, after installing this second way, the app is still stuck on an old
+version, the fastest way to force a check:
+1. Open `chrome://webapks` in Chrome's address bar, find the app in the
+   list and tap "Check for update".
+2. Or: Android Settings → Apps → find the installed app → Storage →
+   "Clear cache" (or "Clear storage") → open the app from the home screen
+   again.
+3. Or reinstall: remove the icon from the home screen and open the site in
+   Chrome again → "Install app".
 
-## Возможности приложения
+## App features
 
-- Лист персонажа по официальной структуре: характеристики, спасброски и
-  навыки с владением (чекбоксы, бонус мастерства учитывается автоматически),
-  инициатива и пассивное восприятие (авто-расчёт), кости здоровья, спасброски
-  от смерти, вдохновение, опыт, атаки, владения, кошелёк
-- Полноценная база заклинаний с фильтрами по уровню/классу/школе и поиском
-- Бестиарий с фильтрами по типу, подтипу, сложности (КО), размеру и месту
-  обитания, поиском по названию
-- Каталог предметов с фильтром по типу, подтипу и редкости, поиском по
-  названию; броня и оружие можно экипировать — КД и бонус атаки считаются
-  автоматически
-- Трекер боя: счётчик раундов, порядок ходов по инициативе, быстрое
-  добавление персонажей/существ, отслеживание ХП прямо во время боя
-- Существа тоже могут владеть заклинаниями — добавляются и открываются
-  так же, как на листе персонажа
-- КД от брони считается корректно: лёгкая/средняя/тяжёлая броня по-разному
-  учитывает модификатор Ловкости, отдельно — фиксированные бонусы (щиты и т.п.)
-- В длинных текстовых полях можно выделять текст жирным, курсивом,
-  подчёркиванием, менять цвет и размер (3 уровня) — со звуком на каждое
-  нажатие и подсветкой активного форматирования
-- Метки в тексте: выделите название умения и нажмите «#», чтобы отметить
-  его как метку — потом можно мгновенно перейти к ней через «🔍» вместо
-  прокрутки всего длинного списка
-- Форматирование текста доступно и в бестиарии — для описания и действий
-  существа
-- Палитра иконок сильно расширена: погодные явления, природа, разное
-- Бестиарий: скорость полёта/плавания/лазанья, навыки, пассивное
-  восприятие и языки существа
-- Каталог заклинаний: добавлены классы Изобретатель и Псионик
-- Раздел «Книги» (значок 📚 в шапке) — загрузка своих PDF с книгами
-  правил, хранятся на устройстве; встроенный постраничный просмотрщик
-  (pdf.js) с зумом, работает офлайн после первого открытия онлайн
-- Аватарки персонажей, существ и предметов можно сделать видео (MP4/WebM)
-  или анимированной GIF-картинкой (до 30 МБ), а не только статичным фото
-  или эмодзи — проигрывается прямо в кружке аватарки (без звука, зациклено)
-  везде, где он показан: в списках, карточках, шапке листа персонажа
-- Загруженные статичные фото (JPG/PNG/WebP) автоматически масштабируются
-  и сжимаются без потери резкости на экранах с высоким разрешением; видео
-  и GIF сохраняются как есть, без перекодирования — анимация не портится
-- У существ и предметов есть подтип — например «Гуманоид (гоблиноид)»
-  или «Броня (тяжёлая)» — показывается рядом с типом в списке и в карточке,
-  фильтруется отдельным рядом чипов
-- Быстрый бросок в один тап: клик по характеристике, спасброску, навыку
-  или атаке в листе персонажа сразу показывает попап с результатом d20 +
-  модификатор (крупно) и детализацией броска (мелко) — без похода на
-  отдельную вкладку с кубиками; бонус атаки автоматически учитывает надетое
-  снаряжение
-- Бросок атаки и урона считается по формуле D&D: попадание — 1к20 +
-  модификатор выбранной характеристики (Сила/Ловкость/…) + бонус мастерства
-  (если отмечено владение оружием) + доп. бонус (магическое оружие, черты)
-  + бонус от надетого снаряжения; урон — кости из поля "Урон и эффект" +
-  та же характеристика (без бонуса мастерства — он только на попадание,
-  как и по правилам). Отдельная кнопка 🎲 у атаки бросает только урон,
-  клик по самой атаке — только попадание
-- Лист персонажа разбит на вкладки — Бой, Магия, Инвентарь, Инфо — вместо
-  одного длинного списка; шапка с именем, расой, классом и уровнем всегда
-  видна сверху, вкладки переключают всё остальное
-- У каждого персонажа можно задать свой цвет имени
-- 8 тем оформления: Тёмное фэнтези, Пергамент, Полночь, Изумруд, Нежить,
-  Україна (сине-жёлтая), тёплая «Пламя» и «Ирландский клевер» — с узором
-  из листьев клевера, замощённым по всему экрану во всех разделах
-- Декоративный шрифт для заголовков (Cinzel), полоса HP, более
-  "премиальные" карточки со свечением
-- 4 ячейки под особые ресурсы (Истощение, Очки Ци, заряды предмета
-  и т.п.) — своё название и счётчик у каждой
-- Ячейки заклинаний по уровням (1-9) с трекером потраченных/доступных,
-  автоматический расчёт сложности спасброска и бонуса атаки заклинанием
-  от выбранной базовой характеристики
-- Добавление своего контента (существа/предметы/заклинания/расы/классы)
-- Встроенные кубики (d4–d100): SVG-рендер с выбором скина (рубин/золото/
-  изумруд/аметист/обсидиан), декоративные соседние грани у d20/d100,
-  свечение позади кубика, степпер модификатора, преимущество/помеха
-  для d20, анимация броска с покачиванием, вспышка на критический
-  успех/провал
-- Атмосферные звуки, анимированная заставка при запуске
-- Импорт/экспорт всего содержимого в один .json файл
-- Кнопка принудительного обновления приложения (очистка кэша PWA) в Настройках
+- Character sheet following the official structure: ability scores, saving
+  throws and skills with proficiency (checkboxes, proficiency bonus applied
+  automatically), initiative and passive perception (auto-calculated), hit
+  dice, death saves, inspiration, experience, attacks, proficiencies, purse
+- A full spell database with filters by level/class/school and search
+- Bestiary with filters by type, subtype, challenge rating (CR), size and
+  habitat, plus search by name
+- Item catalog with filters by type, subtype and rarity, plus search by
+  name; armor and weapons can be equipped — AC and attack bonus are
+  calculated automatically
+- Combat tracker: round counter, initiative turn order, quick-add for
+  characters/creatures, HP tracking right during combat
+- Creatures can have spells too — added and opened the same way as on a
+  character sheet
+- AC from armor is calculated correctly: light/medium/heavy armor each
+  handle the Dexterity modifier differently, and flat bonuses (shields
+  etc.) are applied separately
+- In long text fields you can bold, italicize, underline, and change color
+  and size (3 levels) of selected text — with a sound on every tap and the
+  active formatting highlighted
+- Bookmarks in text: select a feature's name and press "#" to mark it as a
+  bookmark — then jump straight to it via "🔍" instead of scrolling through
+  the whole long list
+- Text formatting is also available in the bestiary — for a creature's
+  description and actions
+- The icon palette has been significantly expanded: weather phenomena,
+  nature, miscellaneous
+- Bestiary: fly/swim/climb speed, skills, passive perception and languages
+  for creatures
+- Spell catalog: added the Artificer and Psion classes
+- A "Books" section (📚 icon in the header) — upload your own PDF rulebooks,
+  stored on the device; a built-in page-by-page viewer (pdf.js) with zoom,
+  works offline after the first online open
+- Avatars for characters, creatures and items can be a video (MP4/WebM) or
+  an animated GIF (up to 30 MB), not just a static photo or emoji — plays
+  right inside the avatar circle (silent, looping) everywhere it's shown:
+  in lists, cards, the character sheet header
+- Uploaded static photos (JPG/PNG/WebP) are automatically resized and
+  compressed without losing sharpness on high-resolution screens; video and
+  GIF are stored as-is, without re-encoding — so the animation doesn't
+  degrade
+- Creatures and items have a subtype — e.g. "Humanoid (goblinoid)" or
+  "Armor (heavy)" — shown next to the type in the list and on the card,
+  filterable via its own row of chips
+- One-tap quick roll: clicking an ability score, saving throw, skill or
+  attack on the character sheet immediately shows a popup with the d20 +
+  modifier result (large) and the roll breakdown (small) — no need to go to
+  a separate dice tab; the attack bonus automatically accounts for equipped
+  gear
+- Attack and damage rolls follow the D&D formula: to-hit — 1d20 + the
+  modifier of the chosen ability (Strength/Dexterity/…) + proficiency bonus
+  (if weapon proficiency is checked) + a flat bonus (magic weapon, feats) +
+  the bonus from equipped gear; damage — the dice from the "Damage &
+  effect" field + the same ability (without the proficiency bonus — that
+  only applies to the to-hit roll, per the rules). A separate 🎲 button on
+  an attack rolls only the damage; clicking the attack itself rolls only
+  the to-hit
+- The character sheet is split into tabs — Combat, Magic, Inventory, Info —
+  instead of one long list; the header with name, race, class and level is
+  always visible at the top, the tabs switch everything else
+- Each character can have their own name color
+- 8 visual themes: Dark Fantasy, Parchment, Midnight, Emerald, Undead,
+  Ukraine (blue-and-yellow), warm "Ember", and "Irish Clover" — with a
+  clover-leaf pattern tiled across the whole screen in every section
+- A decorative font for headings (Cinzel), an HP bar, more "premium"-looking
+  cards with a glow effect
+- 4 slots for special resources (Exhaustion, Ki points, item charges, etc.)
+  — each with its own name and counter
+- Spell slots by level (1–9) with a tracker for used/available, automatic
+  calculation of spell save DC and spell attack bonus from the chosen
+  casting ability
+- Add your own content (creatures/items/spells/races/classes)
+- Built-in dice (d4–d100): SVG rendering with a choice of skin
+  (ruby/gold/emerald/amethyst/obsidian), decorative neighboring faces on
+  d20/d100, a glow behind the die, a modifier stepper, advantage/disadvantage
+  for d20, a roll animation with wobble, a flash on a critical hit/miss
+- Ambient sounds, an animated splash screen on launch
+- Import/export of all content into a single .json file
+- A button to force-update the app (clear the PWA cache) in Settings
+- Skill proficiency can be raised to Expertise (double proficiency bonus) —
+  clicking a skill's circle cycles empty → proficient (✓) → expertise (★)
+- A "Trinkets & notes" block in the Inventory tab — free-form text for
+  small odds and ends you don't want to set up as separate items
+- Items can grant an ability score bonus (e.g. a ring of +2 Strength) —
+  configured in the item form, applies while the item is equipped, and is
+  factored into every relevant calculation (checks, saves, skills, AC,
+  spellcasting, attacks) rather than just being shown for reference
