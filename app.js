@@ -1618,7 +1618,9 @@ function openBestiaryDetail(id) {
     <div class="meta" style="color:var(--text-dim);margin-bottom:8px;text-align:center">${escapeHtml(b.type)}${b.size ? ' · ' + escapeHtml(b.size) : ''} · КО ${escapeHtml(b.cr)}</div>
     ${b.habitat && b.habitat.length ? `<div class="meta" style="margin-bottom:8px;text-align:center">Обитание: ${escapeHtml(b.habitat.join(', '))}</div>` : ''}
     <div style="margin-bottom:8px">КД ${b.ac} · ХП ${escapeHtml(String(b.hp))}</div>
+    <div style="margin-bottom:8px">Инициатива ${escapeHtml(b.initiative || '—')}</div>
     <div style="margin-bottom:8px">Скорость: ${speedParts.join(', ')}</div>
+    ${b.specialProperties ? `<div style="margin-bottom:10px"><b>Особые свойства</b><div style="margin-top:4px;white-space:pre-wrap">${escapeHtml(b.specialProperties)}</div></div>` : ''}
     <div style="margin-bottom:8px;font-size:13px;color:var(--text-dim)">${abRow}</div>
     ${b.skills ? `<div style="margin-bottom:4px"><b>Навыки</b> ${escapeHtml(b.skills)}</div>` : ''}
     ${b.perception ? `<div style="margin-bottom:4px"><b>Восприятие (пассивное)</b> ${escapeHtml(b.perception)}</div>` : ''}
@@ -1645,7 +1647,7 @@ function openBestiaryDetail(id) {
 }
 
 function openBestiaryForm(existing) {
-  const b = existing || { id: uid('b'), name: '', type: '', cr: '', size: 'Средний', habitat: [], ac: 10, hp: '', speed: '30 фт', flySpeed: '', swimSpeed: '', climbSpeed: '', skills: '', perception: '', languages: '', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, actions: '', description: '', avatar: '', knownSpells: [], custom: true };
+  const b = existing || { id: uid('b'), name: '', type: '', cr: '', size: 'Средний', habitat: [], ac: 10, hp: '', initiative: '', speed: '30 фт', flySpeed: '', swimSpeed: '', climbSpeed: '', specialProperties: '', skills: '', perception: '', languages: '', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, actions: '', description: '', avatar: '', knownSpells: [], custom: true };
   if (!b.habitat) b.habitat = [];
   if (!b.knownSpells) b.knownSpells = [];
   if (b.flySpeed === undefined) b.flySpeed = '';
@@ -1654,6 +1656,8 @@ function openBestiaryForm(existing) {
   if (b.skills === undefined) b.skills = '';
   if (b.perception === undefined) b.perception = '';
   if (b.languages === undefined) b.languages = '';
+  if (b.initiative === undefined) b.initiative = '';
+  if (b.specialProperties === undefined) b.specialProperties = '';
   const sizeOptions = CREATURE_SIZES.map(s => `<option ${s === b.size ? 'selected' : ''}>${s}</option>`).join('');
   const habitatChips = HABITATS.map(h => `<button type="button" class="chip ${b.habitat.includes(h) ? 'active' : ''}" data-h="${escapeHtml(h)}">${escapeHtml(h)}</button>`).join('');
   openModal(existing ? 'Редактировать существо' : 'Новое существо', `
@@ -1668,12 +1672,16 @@ function openBestiaryForm(existing) {
       <div><label>ХП</label><input id="bHp" value="${escapeAttr(String(b.hp))}" placeholder="2к6"></div>
       <div><label>Скорость (по земле)</label><input id="bSpeed" value="${escapeAttr(b.speed)}"></div>
     </div>
+    <label>Инициатива</label>
+    <input id="bInitiative" value="${escapeAttr(b.initiative)}" placeholder="+1">
     <div class="row">
       <div><label>Полёт</label><input id="bFlySpeed" value="${escapeAttr(b.flySpeed)}" placeholder="Например, 50 фт"></div>
       <div><label>Плавание</label><input id="bSwimSpeed" value="${escapeAttr(b.swimSpeed)}" placeholder="Например, 40 фт"></div>
     </div>
     <label>Лазанье (по стенам и т.п.)</label>
     <input id="bClimbSpeed" value="${escapeAttr(b.climbSpeed)}" placeholder="Например, 30 фт">
+    <label>Особые свойства</label>
+    <textarea id="bSpecialProperties" placeholder="Особые свойства существа">${escapeHtml(b.specialProperties)}</textarea>
     <label>Размер</label>
     <select id="bSize">${sizeOptions}</select>
     <label>Обитание (можно выбрать несколько)</label>
@@ -1749,10 +1757,12 @@ function openBestiaryForm(existing) {
     b.cr = document.getElementById('bCr').value.trim();
     b.ac = parseInt(document.getElementById('bAc').value) || 10;
     b.hp = document.getElementById('bHp').value.trim();
+    b.initiative = document.getElementById('bInitiative').value.trim();
     b.speed = document.getElementById('bSpeed').value.trim();
     b.flySpeed = document.getElementById('bFlySpeed').value.trim();
     b.swimSpeed = document.getElementById('bSwimSpeed').value.trim();
     b.climbSpeed = document.getElementById('bClimbSpeed').value.trim();
+    b.specialProperties = document.getElementById('bSpecialProperties').value.trim();
     b.skills = document.getElementById('bSkills').value.trim();
     b.perception = document.getElementById('bPerception').value.trim();
     b.languages = document.getElementById('bLanguages').value.trim();
