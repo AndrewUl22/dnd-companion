@@ -14,7 +14,7 @@ function loadState() {
     customRaces: [],
     customClasses: [],
     battle: { combatants: [], currentIndex: 0, round: 1 },
-    settings: { theme: 'dark', soundEnabled: true, diceSkin: 'ruby' }
+    settings: { theme: 'dark', soundEnabled: true, diceSkin: 'ruby', showDefaultBestiary: false, showDefaultItems: false, showDefaultSpells: false }
   };
 }
 
@@ -27,8 +27,11 @@ if (!state.spells) state.spells = JSON.parse(JSON.stringify(DEFAULT_SPELLS)); //
 if (!state.customRaces) state.customRaces = [];
 if (!state.customClasses) state.customClasses = [];
 if (!state.battle) state.battle = { combatants: [], currentIndex: 0, round: 1 };
-if (!state.settings) state.settings = { theme: 'dark', soundEnabled: true, diceSkin: 'ruby' };
+if (!state.settings) state.settings = { theme: 'dark', soundEnabled: true, diceSkin: 'ruby', showDefaultBestiary: false, showDefaultItems: false };
 if (!state.settings.diceSkin) state.settings.diceSkin = 'ruby';
+if (state.settings.showDefaultBestiary === undefined) state.settings.showDefaultBestiary = false;
+if (state.settings.showDefaultItems === undefined) state.settings.showDefaultItems = false;
+if (state.settings.showDefaultSpells === undefined) state.settings.showDefaultSpells = false;
 if (state.settings.theme === 'coffee') state.settings.theme = 'undead'; // миграция: тему переименовали в "Нежить"
 
 function applyTheme() {
@@ -53,6 +56,18 @@ let spellLevelFilter = 'Все';
 let spellClassFilter = 'Все';
 let spellSchoolFilter = 'Все';
 let spellSearchQuery = '';
+
+function visibleBestiary() {
+  return state.bestiary.filter(b => b.custom || state.settings.showDefaultBestiary);
+}
+
+function visibleItems() {
+  return state.items.filter(i => i.custom || state.settings.showDefaultItems);
+}
+
+function visibleSpells() {
+  return state.spells.filter(s => s.custom || state.settings.showDefaultSpells);
+}
 
 // ==================== UTIL ====================
 function uid(prefix) {
@@ -505,14 +520,9 @@ function newCharacter(name) {
     attacks: [],
     spellcastingAbility: '',
     cantripsKnown: 0,
-    customResources: [
-      { name: '', total: 0, used: 0 },
-      { name: '', total: 0, used: 0 },
-      { name: '', total: 0, used: 0 },
-      { name: '', total: 0, used: 0 }
-    ],
+    customResources: [{ name: '', total: 0, used: 0 }],
     spellSlots: { 1: { total: 0, used: 0 }, 2: { total: 0, used: 0 }, 3: { total: 0, used: 0 }, 4: { total: 0, used: 0 }, 5: { total: 0, used: 0 }, 6: { total: 0, used: 0 }, 7: { total: 0, used: 0 }, 8: { total: 0, used: 0 }, 9: { total: 0, used: 0 } },
-    classFeatures: '', racialTraits: '', feats: '',
+    features: [],
     appearance: '', backstory: '',
     currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
     inventory: [],
@@ -584,24 +594,298 @@ function migrateChar(c) {
   if (c.spellcastingAbility === undefined) c.spellcastingAbility = '';
   if (c.cantripsKnown === undefined) c.cantripsKnown = 0;
   if (!c.customResources || !Array.isArray(c.customResources)) c.customResources = [];
-  while (c.customResources.length < 4) c.customResources.push({ name: '', total: 0, used: 0 });
+  if (!c.customResources.length) c.customResources.push({ name: '', total: 0, used: 0 });
+  while (c.customResources.length > 1) {
+    const last = c.customResources[c.customResources.length - 1];
+    if (last.name || last.total || last.used) break;
+    c.customResources.pop();
+  }
+  const lastResource = c.customResources[c.customResources.length - 1];
+  if (lastResource.name || lastResource.total || lastResource.used) {
+    c.customResources.push({ name: '', total: 0, used: 0 });
+  }
   if (!c.spellSlots) c.spellSlots = {};
   for (let lvl = 1; lvl <= 9; lvl++) {
     if (!c.spellSlots[lvl]) c.spellSlots[lvl] = { total: 0, used: 0 };
   }
-  if (c.classFeatures === undefined) c.classFeatures = '';
-  if (c.racialTraits === undefined) c.racialTraits = '';
-  if (c.feats === undefined) c.feats = '';
+  if (!Array.isArray(c.features)) c.features = migrateLegacyFeatures(c);
+  c.features = c.features.filter(feature => feature && typeof feature === 'object').map(feature => ({
+    id: feature.id || uid('feature'),
+    name: feature.name || '',
+    source: feature.source || '',
+    description: feature.description || ''
+  }));
   if (c.appearance === undefined) c.appearance = '';
   if (c.backstory === undefined) c.backstory = '';
   if (!c.currency) c.currency = { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 };
   return c;
 }
 
+function migrateLegacyFeatures(c) {
+  const features = [];
+  const unmarkedParts = [];
+  [['classFeatures'], ['racialTraits'], ['feats']].forEach(([field]) => {
+    const html = String(c[field] || '').trim();
+    if (!html) return;
+    const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+    const root = doc.body.firstElementChild;
+    const anchors = [...root.querySelectorAll('.text-anchor')];
+    if (!anchors.length) {
+      unmarkedParts.push(root.innerHTML);
+      return;
+    }
+    const beforeFirst = document.createRange();
+    beforeFirst.selectNodeContents(root);
+    beforeFirst.setEndBefore(anchors[0]);
+    if (beforeFirst.cloneContents().textContent.trim()) {
+      const holder = document.createElement('div');
+      holder.appendChild(beforeFirst.cloneContents());
+      unmarkedParts.push(holder.innerHTML);
+    }
+    anchors.forEach((anchor, index) => {
+      const range = document.createRange();
+      range.setStartAfter(anchor);
+      if (anchors[index + 1]) range.setEndBefore(anchors[index + 1]);
+      else range.setEndAfter(root.lastChild);
+      const holder = document.createElement('div');
+      holder.appendChild(range.cloneContents());
+      features.push({
+        id: uid('feature'),
+        name: anchor.textContent.trim(),
+        source: '',
+        description: holder.innerHTML.trim()
+      });
+    });
+  });
+  if (unmarkedParts.some(html => html.trim())) {
+    features.push({
+      id: uid('feature'),
+      name: 'Без названия',
+      source: '',
+      description: unmarkedParts.join('<br>')
+    });
+  }
+  return features;
+}
+
+let featuresSectionCollapsed = false;
+const infoSectionCollapsed = {
+  infoBackgroundContent: false,
+  infoNotesContent: false
+};
+
+function setInfoSectionCollapsed(targetId, collapsed) {
+  const content = document.getElementById(targetId);
+  const title = document.querySelector(`[data-collapse-target="${targetId}"]`);
+  if (!content || !title) return;
+  infoSectionCollapsed[targetId] = collapsed;
+  content.style.display = collapsed ? 'none' : '';
+  const indicator = title.querySelector('.collapse-indicator');
+  if (indicator) indicator.textContent = collapsed ? '⌄' : '⌃';
+}
+
+function setInfoTextEditing(editorId, editing) {
+  const editor = document.getElementById(editorId);
+  const controls = document.querySelector(`[data-info-controls="${editorId}"]`);
+  const editButton = document.querySelector(`[data-info-edit="${editorId}"]`);
+  if (!editor || !controls || !editButton) return;
+  editor.contentEditable = editing ? 'true' : 'false';
+  controls.style.display = editing ? 'block' : 'none';
+  editButton.style.display = editing ? 'none' : '';
+}
+
+document.querySelectorAll('[data-collapse-target]').forEach(title => {
+  title.addEventListener('click', () => {
+    const targetId = title.dataset.collapseTarget;
+    setInfoSectionCollapsed(targetId, !infoSectionCollapsed[targetId]);
+  });
+  document.querySelectorAll('[data-info-edit]').forEach(button => {
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      setInfoTextEditing(button.dataset.infoEdit, true);
+      document.getElementById(button.dataset.infoEdit)?.focus();
+    });
+  });
+  document.querySelectorAll('[data-info-save]').forEach(button => {
+    button.addEventListener('click', () => {
+      setInfoTextEditing(button.dataset.infoSave, false);
+    });
+  });
+});
+
+function renderFeatures(c) {
+  const list = document.getElementById('featuresList');
+  const content = document.getElementById('featuresContent');
+  const toggle = document.getElementById('featuresToggleBtn');
+  if (!list || !content || !toggle) return;
+  content.closest('.card').classList.toggle('features-section-collapsed', featuresSectionCollapsed);
+  toggle.querySelector('.collapse-indicator').textContent = featuresSectionCollapsed ? '⌄' : '⌃';
+  list.innerHTML = c.features.map((feature, index) => `
+    <article class="feature-item" draggable="true" data-feature-index="${index}">
+      <div class="feature-item-header">
+        <span class="feature-drag-handle" data-feature-drag="${index}" title="Перетащить">⋮⋮</span>
+        <div class="feature-item-title" data-feature-toggle="${index}">
+          <strong>${escapeHtml(feature.name || 'Без названия')}</strong>
+          ${feature.source ? `<span class="feature-item-source">${escapeHtml(feature.source)}</span>` : ''}
+        </div>
+        ${feature.editing ? '' : `<button type="button" class="feature-edit-btn" data-feature-edit="${index}" title="Редактировать">⚙</button>`}
+        <button type="button" class="feature-delete-btn" data-feature-delete="${index}" title="Удалить">×</button>
+      </div>
+      <div class="feature-item-body" data-feature-body="${index}" style="display:block">
+        ${feature.editing ? `
+          <div class="feature-edit-grid">
+            <input type="text" data-feature-field="name" data-feature-index="${index}" value="${escapeAttr(feature.name)}" placeholder="Название">
+            <input type="text" data-feature-field="source" data-feature-index="${index}" value="${escapeAttr(feature.source)}" placeholder="Источник">
+            <div class="rich-toolbar feature-rich-toolbar" data-target="featureDescription-${feature.id}"></div>
+            <div class="rich-editable feature-description-editor" id="featureDescription-${feature.id}" contenteditable="true" data-feature-field="description" data-feature-index="${index}" data-placeholder="Описание">${feature.description || ''}</div>
+          </div>
+          <button type="button" class="primary block feature-save-btn" data-feature-save="${index}">✓ Сохранить</button>
+        ` : feature.description ? `<div>${feature.description}</div>` : '<div class="meta">Нет описания</div>'}
+      </div>
+    </article>
+  `).join('');
+  bindRichToolbars();
+  list.querySelectorAll('.feature-description-editor').forEach(editor => {
+    editor.addEventListener('input', () => {
+      const feature = c.features[Number(editor.dataset.featureIndex)];
+      if (!feature) return;
+      feature.description = editor.innerHTML;
+      saveState();
+    });
+  });
+  const captureExpandedFeatures = () => new Set(
+    [...list.querySelectorAll('.feature-item-body')]
+      .filter(body => body.style.display !== 'none')
+      .map(body => c.features[Number(body.dataset.featureBody)]?.id)
+      .filter(Boolean)
+  );
+  const restoreExpandedFeatures = expandedIds => {
+    list.querySelectorAll('.feature-item-body').forEach(body => {
+      const feature = c.features[Number(body.dataset.featureBody)];
+      body.style.display = expandedIds.has(feature?.id) ? 'block' : 'none';
+    });
+  };
+  const collapseFeaturesForDrag = () => {
+    const expandedIds = captureExpandedFeatures();
+    list.querySelectorAll('.feature-item-body').forEach(body => { body.style.display = 'none'; });
+    return expandedIds;
+  };
+  const finishFeatureDrag = (expandedIds, saveOrder = true) => {
+    list.querySelectorAll('.feature-item').forEach(el => el.classList.remove('dragging'));
+    if (saveOrder) {
+      c.features = [...list.querySelectorAll('.feature-item')].map(el => c.features[Number(el.dataset.featureIndex)]);
+      saveState();
+    }
+    renderFeatures(c);
+    restoreExpandedFeatures(expandedIds);
+  };
+
+  list.querySelectorAll('[data-feature-toggle]').forEach(el => {
+    el.addEventListener('click', () => {
+      const body = list.querySelector(`[data-feature-body="${el.dataset.featureToggle}"]`);
+      if (body) body.style.display = body.style.display === 'none' ? 'block' : 'none';
+    });
+  });
+  list.querySelectorAll('[data-feature-edit]').forEach(btn => {
+    btn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      c.features[Number(btn.dataset.featureEdit)].editing = true;
+      renderFeatures(c);
+      const body = list.querySelector(`[data-feature-body="${btn.dataset.featureEdit}"]`);
+      if (body) body.style.display = 'block';
+    });
+  });
+  list.querySelectorAll('[data-feature-delete]').forEach(btn => {
+    btn.addEventListener('click', event => {
+      event.stopPropagation();
+      const index = Number(btn.dataset.featureDelete);
+      const feature = c.features[index];
+      if (!window.confirm(`Удалить особенность «${feature.name || 'Без названия'}»?`)) return;
+      c.features.splice(index, 1);
+      saveState();
+      renderFeatures(c);
+    });
+  });
+  list.querySelectorAll('[data-feature-save]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const index = Number(btn.dataset.featureSave);
+      const item = c.features[index];
+      const row = list.querySelector(`[data-feature-index="${index}"]`);
+      row.querySelectorAll('[data-feature-field]').forEach(field => {
+        item[field.dataset.featureField] = field.isContentEditable ? field.innerHTML : field.value;
+      });
+      delete item.editing;
+      saveState();
+      renderFeatures(c);
+    });
+  });
+  list.querySelectorAll('.feature-item').forEach(item => {
+    item.addEventListener('dragstart', () => {
+      item._expandedFeatureIds = collapseFeaturesForDrag();
+      item.classList.add('dragging');
+    });
+    item.addEventListener('dragend', () => {
+      const expandedIds = item._expandedFeatureIds || captureExpandedFeatures();
+      finishFeatureDrag(expandedIds);
+    });
+    item.addEventListener('dragover', event => {
+      event.preventDefault();
+      const dragging = list.querySelector('.feature-item.dragging');
+      if (!dragging || dragging === item) return;
+      const rect = item.getBoundingClientRect();
+      list.insertBefore(dragging, event.clientY < rect.top + rect.height / 2 ? item : item.nextSibling);
+    });
+    item.addEventListener('drop', event => {
+      event.preventDefault();
+      finishFeatureDrag(item._expandedFeatureIds || captureExpandedFeatures());
+    });
+  });
+  let touchDragItem = null;
+  let touchExpandedFeatureIds = null;
+  list.querySelectorAll('[data-feature-drag]').forEach(handle => {
+    handle.addEventListener('pointerdown', event => {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      touchDragItem = handle.closest('.feature-item');
+      touchExpandedFeatureIds = collapseFeaturesForDrag();
+      touchDragItem.classList.add('dragging');
+      handle.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    });
+    handle.addEventListener('pointermove', event => {
+      if (!touchDragItem) return;
+      const target = document.elementFromPoint(event.clientX, event.clientY)?.closest('.feature-item');
+      if (!target || target === touchDragItem || !list.contains(target)) return;
+      const rect = target.getBoundingClientRect();
+      list.insertBefore(touchDragItem, event.clientY < rect.top + rect.height / 2 ? target : target.nextSibling);
+    });
+    handle.addEventListener('pointerup', event => {
+      if (!touchDragItem) return;
+      const expandedIds = touchExpandedFeatureIds || captureExpandedFeatures();
+      touchDragItem.classList.remove('dragging');
+      touchDragItem = null;
+      touchExpandedFeatureIds = null;
+      handle.releasePointerCapture?.(event.pointerId);
+      finishFeatureDrag(expandedIds);
+    });
+    handle.addEventListener('pointercancel', () => {
+      const expandedIds = touchExpandedFeatureIds || captureExpandedFeatures();
+      if (touchDragItem) touchDragItem.classList.remove('dragging');
+      touchDragItem = null;
+      touchExpandedFeatureIds = null;
+      finishFeatureDrag(expandedIds, false);
+    });
+  });
+}
+
 function openCharacter(id) {
   currentCharId = id;
   switchSheetTab('combat');
   const c = migrateChar(getChar(id));
+  featuresSectionCollapsed = false;
+  setInfoSectionCollapsed('infoBackgroundContent', false);
+  setInfoSectionCollapsed('infoNotesContent', false);
+  ['sheetAppearance', 'sheetBackstory', 'sheetNotes'].forEach(editorId => setInfoTextEditing(editorId, false));
+  saveState();
   if (!c.avatar) c.avatar = '🧙';
   document.getElementById('sheetName').value = c.name;
   document.getElementById('sheetName').style.color = c.nameColor || '';
@@ -630,9 +914,7 @@ function openCharacter(id) {
   document.getElementById('sheetWeaponProf').value = c.weaponProf;
   document.getElementById('sheetToolProf').value = c.toolProf;
   document.getElementById('sheetLanguages').value = c.languages;
-  document.getElementById('sheetClassFeatures').innerHTML = c.classFeatures || '';
-  document.getElementById('sheetRacialTraits').innerHTML = c.racialTraits || '';
-  document.getElementById('sheetFeats').innerHTML = c.feats || '';
+  renderFeatures(c);
   document.getElementById('sheetAppearance').innerHTML = c.appearance || '';
   document.getElementById('sheetBackstory').innerHTML = c.backstory || '';
   document.getElementById('sheetSpells').innerHTML = c.spells || '';
@@ -663,6 +945,19 @@ function openCharacter(id) {
   playDoorCreak();
 }
 
+document.getElementById('featuresToggleBtn').addEventListener('click', () => {
+  featuresSectionCollapsed = !featuresSectionCollapsed;
+  renderFeatures(getChar(currentCharId));
+});
+document.getElementById('addFeatureBtn').addEventListener('click', () => {
+  const c = getChar(currentCharId);
+  if (!c) return;
+  c.features.push({ id: uid('feature'), name: '', source: '', description: '', editing: true });
+  featuresSectionCollapsed = false;
+  saveState();
+  renderFeatures(c);
+});
+
 function updateComputedStats(c) {
   const initEl = document.getElementById('initiativeDisplay');
   if (initEl) initEl.textContent = fmtMod(getAbilityMod(c, 'dex'));
@@ -673,6 +968,12 @@ function updateComputedStats(c) {
   const passEl = document.getElementById('passivePerceptionDisplay');
   if (passEl) passEl.textContent = passive;
 }
+
+document.getElementById('initiativeRollBox').addEventListener('click', () => {
+  const c = getChar(currentCharId);
+  if (!c) return;
+  quickRoll(getAbilityMod(c, 'dex'), 'Инициатива');
+});
 
 function updateSpellcastingStats(c) {
   const ability = c.spellcastingAbility;
@@ -748,11 +1049,38 @@ function renderCustomResources(c) {
       </div>
     </div>
   `).join('');
+  const normalizeResources = () => {
+    const filled = c.customResources.filter(resource =>
+      String(resource.name || '').trim() || Number(resource.total) > 0 || Number(resource.used) > 0
+    );
+    const changed = c.customResources.length !== filled.length + 1;
+    c.customResources = [...filled, { name: '', total: 0, used: 0 }];
+    return changed;
+  };
+  const appendResourceRowIfNeeded = (idx, fieldClass) => {
+    const resource = c.customResources[idx];
+    if (idx !== c.customResources.length - 1 || !(resource.name || resource.total || resource.used)) return;
+    c.customResources.push({ name: '', total: 0, used: 0 });
+    saveState();
+    renderCustomResources(c);
+    const field = wrap.querySelector(`.${fieldClass}[data-idx="${idx}"]`);
+    if (field) {
+      field.focus();
+      if (field.setSelectionRange) field.setSelectionRange(field.value.length, field.value.length);
+    }
+  };
   wrap.querySelectorAll('.resource-name-input').forEach(inp => {
     inp.addEventListener('input', () => {
       const c = getChar(currentCharId);
-      c.customResources[inp.dataset.idx].name = inp.value;
+      const idx = Number(inp.dataset.idx);
+      c.customResources[idx].name = inp.value;
+      if (!inp.value.trim() && normalizeResources()) {
+        saveState();
+        renderCustomResources(c);
+        return;
+      }
       saveState();
+      appendResourceRowIfNeeded(idx, 'resource-name-input');
     });
   });
   wrap.querySelectorAll('.resource-total-input').forEach(inp => {
@@ -762,8 +1090,14 @@ function renderCustomResources(c) {
       const total = Math.max(0, parseInt(inp.value) || 0);
       c.customResources[idx].total = total;
       if (c.customResources[idx].used > total) c.customResources[idx].used = total;
+      if (!total && !String(c.customResources[idx].name || '').trim() && normalizeResources()) {
+        saveState();
+        renderCustomResources(c);
+        return;
+      }
       saveState();
       wrap.querySelector(`.spell-slot-used-display[data-idx="${idx}"]`).textContent = `${c.customResources[idx].used}/${total}`;
+      appendResourceRowIfNeeded(Number(idx), 'resource-total-input');
     });
   });
   wrap.querySelectorAll('button[data-act]').forEach(btn => {
@@ -1164,7 +1498,7 @@ function updateTotalAC(c) {
 }
 
 document.getElementById('addInvFromCatalog').addEventListener('click', () => {
-  const sorted = state.items.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  const sorted = visibleItems().slice().sort((a, b) => a.name.localeCompare(b.name, 'ru'));
   openListPicker(false, 'Выберите предмет', sorted,
     (it) => `<div class="avatar-circle small">${avatarInnerHtml(it, defaultItemEmoji(it.name, it.type))}</div><div style="flex:1"><div>${escapeHtml(it.name)}</div><div class="meta">${escapeHtml(formatItemType(it))}${it.rarity ? ' · ' + escapeHtml(it.rarity) : ''}</div></div><span class="badge">${escapeHtml(it.cost || '')}</span>`,
     (item) => {
@@ -1204,7 +1538,6 @@ document.getElementById('addInvFromCatalog').addEventListener('click', () => {
 // Форматируемые поля (contenteditable) — сохраняем HTML вместо простого текста
 [
   ['sheetSpells', 'spells'], ['sheetNotes', 'notes'],
-  ['sheetClassFeatures', 'classFeatures'], ['sheetRacialTraits', 'racialTraits'], ['sheetFeats', 'feats'],
   ['sheetAppearance', 'appearance'], ['sheetBackstory', 'backstory']
 ].forEach(([elId, field]) => {
   document.getElementById(elId).addEventListener('input', () => {
@@ -1442,7 +1775,8 @@ function crToNumber(cr) {
 }
 
 function renderBestiaryFilterChips() {
-  const types = ['Все', ...new Set(state.bestiary.map(b => b.type))];
+  const source = visibleBestiary();
+  const types = ['Все', ...new Set(source.map(b => b.type))];
   const wrap = document.getElementById('bestiaryFilter');
   wrap.innerHTML = types.map(t => `<button class="chip ${t === bestiaryFilter ? 'active' : ''}" data-t="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('');
   wrap.querySelectorAll('.chip').forEach(chip => {
@@ -1452,7 +1786,7 @@ function renderBestiaryFilterChips() {
   // Подтип (например, у "Гуманоид" бывают "гоблиноид", "орк" и т.п.) —
   // отдельный фильтр, чтобы существа с общим типом, но разными подтипами,
   // не путались друг с другом в списке "Тип".
-  const subtypes = ['Все', ...new Set(state.bestiary.map(b => b.subtype).filter(Boolean))];
+  const subtypes = ['Все', ...new Set(source.map(b => b.subtype).filter(Boolean))];
   const subtypeWrap = document.getElementById('bestiarySubtypeFilter');
   subtypeWrap.innerHTML = subtypes.map(st => `<button class="chip ${st === bestiarySubtypeFilter ? 'active' : ''}" data-st="${escapeHtml(st)}">${escapeHtml(st)}</button>`).join('');
   subtypeWrap.querySelectorAll('.chip').forEach(chip => {
@@ -1460,7 +1794,7 @@ function renderBestiaryFilterChips() {
   });
 
   const crWrap = document.getElementById('bestiaryCrFilter');
-  const crValues = ['Все', ...new Set(state.bestiary.map(b => b.cr).filter(Boolean))].sort((a, b) => {
+  const crValues = ['Все', ...new Set(source.map(b => b.cr).filter(Boolean))].sort((a, b) => {
     if (a === 'Все') return -1;
     if (b === 'Все') return 1;
     return crToNumber(a) - crToNumber(b);
@@ -1471,14 +1805,14 @@ function renderBestiaryFilterChips() {
   });
 
   const sizeWrap = document.getElementById('bestiarySizeFilter');
-  const sizeValues = ['Все', ...CREATURE_SIZES.filter(s => state.bestiary.some(b => b.size === s))];
+  const sizeValues = ['Все', ...CREATURE_SIZES.filter(s => source.some(b => b.size === s))];
   sizeWrap.innerHTML = sizeValues.map(s => `<button class="chip ${s === bestiarySizeFilter ? 'active' : ''}" data-s="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('');
   sizeWrap.querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', () => { bestiarySizeFilter = chip.dataset.s; renderBestiary(); });
   });
 
   const habWrap = document.getElementById('bestiaryHabitatFilter');
-  const habValues = ['Все', ...HABITATS.filter(h => state.bestiary.some(b => (b.habitat || []).includes(h)))];
+  const habValues = ['Все', ...HABITATS.filter(h => source.some(b => (b.habitat || []).includes(h)))];
   habWrap.innerHTML = habValues.map(h => `<button class="chip ${h === bestiaryHabitatFilter ? 'active' : ''}" data-h="${escapeHtml(h)}">${escapeHtml(h)}</button>`).join('');
   habWrap.querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', () => { bestiaryHabitatFilter = chip.dataset.h; renderBestiary(); });
@@ -1488,7 +1822,7 @@ function renderBestiaryFilterChips() {
 function renderBestiary() {
   renderBestiaryFilterChips();
   const list = document.getElementById('bestiaryList');
-  const items = state.bestiary
+  const items = visibleBestiary()
     .filter(b =>
       (bestiaryFilter === 'Все' || b.type === bestiaryFilter) &&
       (bestiarySubtypeFilter === 'Все' || b.subtype === bestiarySubtypeFilter) &&
@@ -1659,7 +1993,7 @@ function openBestiaryForm(existing) {
   renderBeastSpellsInForm();
 
   document.getElementById('bAddSpellBtn').addEventListener('click', () => {
-    const sorted = state.spells.slice().sort((a, b2) => a.level - b2.level || a.name.localeCompare(b2.name, 'ru'));
+    const sorted = visibleSpells().slice().sort((a, b2) => a.level - b2.level || a.name.localeCompare(b2.name, 'ru'));
     openListPicker(true, 'Выберите заклинание', sorted,
       (sp) => `<div style="flex:1"><div>${escapeHtml(sp.name)}</div><div class="meta">${escapeHtml(sp.school)}</div></div><span class="badge">${sp.level === 0 ? 'Загов.' : 'Ур.' + sp.level}</span>`,
       (sp) => {
@@ -1731,7 +2065,7 @@ function renderSpellFilterChips() {
 }
 
 function filteredSpells() {
-  return state.spells.filter(s => {
+  return visibleSpells().filter(s => {
     if (spellLevelFilter !== 'Все' && s.level !== spellLevelFilter) return false;
     if (spellClassFilter !== 'Все' && !s.classes.includes(spellClassFilter)) return false;
     if (spellSchoolFilter !== 'Все' && s.school !== spellSchoolFilter) return false;
@@ -1896,7 +2230,7 @@ function renderCharSpells(c) {
 }
 
 document.getElementById('addSpellFromCatalog').addEventListener('click', () => {
-  const sorted = state.spells.slice().sort((a, b) => a.level - b.level || a.name.localeCompare(b.name, 'ru'));
+  const sorted = visibleSpells().slice().sort((a, b) => a.level - b.level || a.name.localeCompare(b.name, 'ru'));
   openListPicker(false, 'Выберите заклинание', sorted,
     (s) => `<div style="flex:1"><div>${escapeHtml(s.name)}</div><div class="meta">${escapeHtml(s.school)}${s.concentration ? ' · конц.' : ''}</div></div><span class="badge">${s.level === 0 ? 'Загов.' : 'Ур.' + s.level}</span>`,
     (s) => {
@@ -1912,7 +2246,8 @@ document.getElementById('addSpellFromCatalog').addEventListener('click', () => {
 
 // ==================== ITEMS ====================
 function renderItemsFilterChips() {
-  const types = ['Все', ...new Set(state.items.map(i => i.type))];
+  const source = visibleItems();
+  const types = ['Все', ...new Set(source.map(i => i.type))];
   const wrap = document.getElementById('itemsFilter');
   wrap.innerHTML = types.map(t => `<button class="chip ${t === itemsFilter ? 'active' : ''}" data-t="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('');
   wrap.querySelectorAll('.chip').forEach(chip => {
@@ -1921,7 +2256,7 @@ function renderItemsFilterChips() {
 
   // Подтип (например, у "Броня" бывают "лёгкая", "тяжёлая" и т.п.) — тот же
   // принцип, что и подтип в бестиарии.
-  const subtypes = ['Все', ...new Set(state.items.map(i => i.subtype).filter(Boolean))];
+  const subtypes = ['Все', ...new Set(source.map(i => i.subtype).filter(Boolean))];
   const subtypeWrap = document.getElementById('itemsSubtypeFilter');
   subtypeWrap.innerHTML = subtypes.map(st => `<button class="chip ${st === itemsSubtypeFilter ? 'active' : ''}" data-st="${escapeHtml(st)}">${escapeHtml(st)}</button>`).join('');
   subtypeWrap.querySelectorAll('.chip').forEach(chip => {
@@ -1929,7 +2264,7 @@ function renderItemsFilterChips() {
   });
 
   const rarWrap = document.getElementById('itemsRarityFilter');
-  const rarValues = ['Все', ...RARITIES.filter(r => state.items.some(i => i.rarity === r))];
+  const rarValues = ['Все', ...RARITIES.filter(r => source.some(i => i.rarity === r))];
   rarWrap.innerHTML = rarValues.map(r => `<button class="chip ${r === itemsRarityFilter ? 'active' : ''}" data-r="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join('');
   rarWrap.querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', () => { itemsRarityFilter = chip.dataset.r; renderItems(); });
@@ -1943,7 +2278,7 @@ function rarityToNumber(r) {
 function renderItems() {
   renderItemsFilterChips();
   const list = document.getElementById('itemsList');
-  const items = state.items
+  const items = visibleItems()
     .filter(i =>
       (itemsFilter === 'Все' || i.type === itemsFilter) &&
       (itemsSubtypeFilter === 'Все' || i.subtype === itemsSubtypeFilter) &&
@@ -2156,7 +2491,7 @@ document.getElementById('resetBattleBtn').addEventListener('click', () => {
 
 function openCombatantForm() {
   const charOptions = state.characters.map(c => `<option value="char:${c.id}">${escapeHtml(c.name)}</option>`).join('');
-  const beastOptions = state.bestiary.map(b => `<option value="beast:${b.id}">${escapeHtml(b.name)}</option>`).join('');
+  const beastOptions = visibleBestiary().map(b => `<option value="beast:${b.id}">${escapeHtml(b.name)}</option>`).join('');
   openModal('Добавить участника', `
     <label>Быстро добавить из персонажей/бестиария</label>
     <select id="cbQuickPick">
@@ -2350,16 +2685,37 @@ document.getElementById('bookFileInput').addEventListener('change', (e) => {
 
 // ==================== IMPORT / EXPORT ====================
 document.getElementById('exportBtn').addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  downloadJson(state, 'dnd-companion-export');
+  showToast('Файл сохранён');
+});
+
+function downloadJson(data, name) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'dnd-companion-export-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.download = name + '-' + new Date().toISOString().slice(0, 10) + '.json';
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-  showToast('Файл сохранён');
+}
+
+document.getElementById('exportBestiaryBtn').addEventListener('click', () => {
+  downloadJson({ bestiary: state.bestiary }, 'dnd-companion-bestiary');
+  showToast('Бестиарий сохранён');
+});
+document.getElementById('exportCharactersBtn').addEventListener('click', () => {
+  downloadJson({ characters: state.characters }, 'dnd-companion-characters');
+  showToast('Персонажи сохранены');
+});
+document.getElementById('exportItemsBtn').addEventListener('click', () => {
+  downloadJson({ items: state.items }, 'dnd-companion-items');
+  showToast('Предметы сохранены');
+});
+document.getElementById('exportSpellsBtn').addEventListener('click', () => {
+  downloadJson({ spells: state.spells }, 'dnd-companion-spells');
+  showToast('Заклинания сохранены');
 });
 
 document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
@@ -2440,6 +2796,31 @@ soundToggle.addEventListener('change', () => {
   state.settings.soundEnabled = soundToggle.checked;
   saveState();
   if (soundToggle.checked) playChainClink();
+});
+
+const showDefaultBestiary = document.getElementById('showDefaultBestiary');
+showDefaultBestiary.checked = state.settings.showDefaultBestiary;
+showDefaultBestiary.addEventListener('change', () => {
+  state.settings.showDefaultBestiary = showDefaultBestiary.checked;
+  saveState();
+  renderBestiary();
+  renderBattle();
+});
+
+const showDefaultItems = document.getElementById('showDefaultItems');
+showDefaultItems.checked = state.settings.showDefaultItems;
+showDefaultItems.addEventListener('change', () => {
+  state.settings.showDefaultItems = showDefaultItems.checked;
+  saveState();
+  renderItems();
+});
+
+const showDefaultSpells = document.getElementById('showDefaultSpells');
+showDefaultSpells.checked = state.settings.showDefaultSpells;
+showDefaultSpells.addEventListener('change', () => {
+  state.settings.showDefaultSpells = showDefaultSpells.checked;
+  saveState();
+  renderSpells();
 });
 
 // ==================== DICE ROLLER (SVG-кубики со скинами) ====================
