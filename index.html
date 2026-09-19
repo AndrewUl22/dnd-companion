@@ -330,13 +330,22 @@
 
   <!-- ===== SPELLS VIEW ===== -->
   <section class="view" id="view-spells">
-    <div class="section-title" style="margin-top:0">Уровень</div>
-    <div class="chip-row" id="spellLevelFilter"></div>
-    <div class="section-title">Класс</div>
-    <div class="chip-row" id="spellClassFilter"></div>
-    <div class="section-title">Школа</div>
-    <div class="chip-row" id="spellSchoolFilter"></div>
-    <input id="spellSearch" placeholder="Поиск по названию…" style="margin-top:4px">
+    <div class="spell-filters-header" id="spellFiltersToggle">
+      <strong>Фильтры заклинаний <span class="collapse-indicator">⌃</span></strong>
+    </div>
+    <div id="spellFiltersContent">
+      <div class="section-title" style="margin-top:0">Уровень</div>
+      <div class="chip-row" id="spellLevelFilter"></div>
+      <div class="section-title">Класс</div>
+      <div class="chip-row" id="spellClassFilter"></div>
+      <div class="section-title">Школа</div>
+      <div class="chip-row" id="spellSchoolFilter"></div>
+      <div class="section-title">Источник</div>
+      <div class="chip-row" id="spellSourceFilter"></div>
+      <div class="section-title">Редакция</div>
+      <div class="chip-row" id="spellEditionFilter"></div>
+      <input id="spellSearch" placeholder="Поиск по названию…" style="margin-top:4px">
+    </div>
     <div id="spellsList"></div>
   </section>
 
@@ -535,6 +544,9 @@
 
 
 <script src="js/data.js"></script>
+<script src="js/default-bestiary.js"></script>
+<script src="js/default-spells.js"></script>
+<script src="js/default-items.js"></script>
 <script src="js/sounds.js"></script>
 <script src="js/books.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>

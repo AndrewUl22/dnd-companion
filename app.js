@@ -23,7 +23,57 @@ function saveState() {
 }
 
 let state = loadState();
-if (!state.spells) state.spells = JSON.parse(JSON.stringify(DEFAULT_SPELLS)); // миграция для старых сохранений
+if (!state.spells) {
+  state.spells = JSON.parse(JSON.stringify(DEFAULT_SPELLS));
+} else {
+  // Обновляем встроенный каталог после смены формата, сохраняя пользовательские записи.
+  const defaultSpellIds = new Set(DEFAULT_SPELLS.map(spell => spell.id));
+  state.spells = [
+    ...JSON.parse(JSON.stringify(DEFAULT_SPELLS)),
+    ...state.spells.filter(spell => spell.custom || !defaultSpellIds.has(spell.id))
+  ];
+}
+function normalizeSpell(spell) {
+  spell.id = String(spell.id || uid('sp'));
+  spell.name = spell.name || '';
+  spell.level = Number.isFinite(Number(spell.level)) ? Number(spell.level) : 0;
+  spell.school = spell.school || SPELL_SCHOOLS[0];
+  spell.time = spell.time || spell.casting_time || '1 действие';
+  spell.range = spell.range || '';
+  if (!spell.componentFlags) {
+    const components = String(spell.components || '').toUpperCase();
+    spell.componentFlags = {
+      verbal: components.includes('В'),
+      somatic: components.includes('С'),
+      material: components.includes('М')
+    };
+  }
+  spell.componentFlags.verbal = Boolean(spell.componentFlags.verbal);
+  spell.componentFlags.somatic = Boolean(spell.componentFlags.somatic);
+  spell.componentFlags.material = Boolean(spell.componentFlags.material);
+  spell.materialDescription = spell.materialDescription || '';
+  spell.duration = spell.duration || 'Мгновенно';
+  spell.description = spell.description || '';
+  spell.atHigherLevels = spell.atHigherLevels || spell.at_higher_levels || '';
+  const source = spell.source === 'Пользовательское' ? 'HOMEBREW' : spell.source;
+  spell.source = SPELL_SOURCES.includes(source) ? source : (spell.custom ? 'HOMEBREW' : 'PHB');
+  spell.edition = SPELL_EDITIONS.includes(String(spell.edition)) ? String(spell.edition) : '14';
+  spell.classes = Array.isArray(spell.classes) ? spell.classes : [];
+  return spell;
+}
+state.spells.forEach(normalizeSpell);
+if (!Array.isArray(state.characters)) state.characters = [];
+if (!Array.isArray(state.bestiary)) state.bestiary = [];
+state.characters.forEach(character => {
+  if (Array.isArray(character.knownSpells)) {
+    character.knownSpells = character.knownSpells.map(String);
+  }
+});
+state.bestiary.forEach(creature => {
+  if (Array.isArray(creature.knownSpells)) {
+    creature.knownSpells = creature.knownSpells.map(String);
+  }
+});
 if (!state.customRaces) state.customRaces = [];
 if (!state.customClasses) state.customClasses = [];
 if (!state.battle) state.battle = { combatants: [], currentIndex: 0, round: 1 };
@@ -50,6 +100,9 @@ let itemsRarityFilter = 'Все';
 let spellLevelFilter = 'Все';
 let spellClassFilter = 'Все';
 let spellSchoolFilter = 'Все';
+let spellSourceFilter = 'Все';
+let spellEditionFilter = 'Все';
+let spellFiltersCollapsed = false;
 let spellSearchQuery = '';
 
 function visibleBestiary() {
@@ -1551,7 +1604,7 @@ function openBestiaryDetail(id) {
   const editBtn = b.custom ? `<button class="secondary block" id="editBeast">Редактировать</button><button class="danger block" id="deleteBeast">Удалить</button>` : '';
   const spellsHtml = (b.knownSpells && b.knownSpells.length)
     ? `<div class="section-title">Заклинания</div>` + b.knownSpells.map(spId => {
-        const sp = state.spells.find(x => x.id === spId);
+        const sp = state.spells.find(x => String(x.id) === String(spId));
         if (!sp) return '';
         return `<div class="skill-row" data-open-spell="${sp.id}" style="cursor:pointer"><span>${escapeHtml(sp.name)}</span><span class="mod">${sp.level === 0 ? 'Загов.' : 'Ур.' + sp.level} ▸</span></div>`;
       }).join('')
@@ -1662,7 +1715,7 @@ function openBestiaryForm(existing) {
       return;
     }
     wrap.innerHTML = b.knownSpells.map((spId, idx) => {
-      const sp = state.spells.find(x => x.id === spId);
+      const sp = state.spells.find(x => String(x.id) === String(spId));
       if (!sp) return '';
       return `<div class="inv-item"><div data-open-sp="${sp.id}" style="cursor:pointer">${escapeHtml(sp.name)} <span style="color:var(--text-dim);font-size:11px">▸ подробнее</span></div><button type="button" data-idx="${idx}" data-act="del-sp">✕</button></div>`;
     }).join('');
@@ -1725,7 +1778,7 @@ const SPELL_LEVEL_LABELS = { 0: 'Заговор', 1: '1', 2: '2', 3: '3', 4: '4'
 
 function renderSpellFilterChips() {
   const levelWrap = document.getElementById('spellLevelFilter');
-  const levels = ['Все', ...Array.from(new Set(state.spells.map(s => s.level))).sort((a, b) => a - b)];
+  const levels = ['Все', ...Array.from(new Set(visibleSpells().map(s => s.level))).sort((a, b) => a - b)];
   levelWrap.innerHTML = levels.map(l => {
     const label = l === 'Все' ? 'Все' : SPELL_LEVEL_LABELS[l];
     return `<button class="chip ${String(l) === String(spellLevelFilter) ? 'active' : ''}" data-l="${l}">${label}</button>`;
@@ -1747,6 +1800,20 @@ function renderSpellFilterChips() {
   schoolWrap.querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', () => { spellSchoolFilter = chip.dataset.s; renderSpells(); });
   });
+
+  const sourceWrap = document.getElementById('spellSourceFilter');
+  const sources = ['Все', ...SPELL_SOURCES];
+  sourceWrap.innerHTML = sources.map(source => `<button class="chip ${source === spellSourceFilter ? 'active' : ''}" data-source="${source}">${source}</button>`).join('');
+  sourceWrap.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => { spellSourceFilter = chip.dataset.source; renderSpells(); });
+  });
+
+  const editionWrap = document.getElementById('spellEditionFilter');
+  const editions = ['Все', ...SPELL_EDITIONS];
+  editionWrap.innerHTML = editions.map(edition => `<button class="chip ${edition === spellEditionFilter ? 'active' : ''}" data-edition="${edition}">${edition}</button>`).join('');
+  editionWrap.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => { spellEditionFilter = chip.dataset.edition; renderSpells(); });
+  });
 }
 
 function filteredSpells() {
@@ -1754,6 +1821,8 @@ function filteredSpells() {
     if (spellLevelFilter !== 'Все' && s.level !== spellLevelFilter) return false;
     if (spellClassFilter !== 'Все' && !s.classes.includes(spellClassFilter)) return false;
     if (spellSchoolFilter !== 'Все' && s.school !== spellSchoolFilter) return false;
+    if (spellSourceFilter !== 'Все' && s.source !== spellSourceFilter) return false;
+    if (spellEditionFilter !== 'Все' && s.edition !== spellEditionFilter) return false;
     if (spellSearchQuery && !s.name.toLowerCase().includes(spellSearchQuery.toLowerCase())) return false;
     return true;
   }).sort((a, b) => a.level - b.level || a.name.localeCompare(b.name, 'ru'));
@@ -1767,10 +1836,10 @@ function renderSpells() {
   list.innerHTML = items.map(s => `
     <div class="list-item" data-id="${s.id}">
       <div>
-        <div>${escapeHtml(s.name)} ${s.custom ? '★' : ''}</div>
-        <div class="meta">${escapeHtml(s.school)} · ${s.concentration ? 'Конц. · ' : ''}${s.ritual ? 'Ритуал · ' : ''}${escapeHtml(s.classes.join(', '))}</div>
+        <div style="font-weight:700;text-transform:uppercase">${escapeHtml(s.name)} ${s.custom ? '★' : ''}</div>
+        <div class="meta">${escapeHtml(s.school)} · ${s.level === 0 ? 'Заговор' : 'Уровень ' + s.level} · ${escapeHtml(s.classes.join(', '))} · Ред. ${escapeHtml(s.edition)}</div>
       </div>
-      <span class="badge">${s.level === 0 ? 'Загов.' : 'Ур. ' + s.level}</span>
+      <span class="badge">${escapeHtml(s.source || '')}</span>
     </div>
   `).join('');
   list.querySelectorAll('.list-item').forEach(el => {
@@ -1778,29 +1847,42 @@ function renderSpells() {
   });
 }
 
+function formatSpellComponents(spell) {
+  const flags = spell.componentFlags || {};
+  return [
+    flags.verbal ? 'В' : '',
+    flags.somatic ? 'С' : '',
+    flags.material ? 'М' : ''
+  ].filter(Boolean).join(', ') || '—';
+}
+
 document.getElementById('spellSearch').addEventListener('input', (e) => {
   spellSearchQuery = e.target.value;
   renderSpells();
 });
+document.getElementById('spellFiltersToggle').addEventListener('click', () => {
+  spellFiltersCollapsed = !spellFiltersCollapsed;
+  document.getElementById('spellFiltersContent').style.display = spellFiltersCollapsed ? 'none' : '';
+  document.querySelector('#spellFiltersToggle .collapse-indicator').textContent = spellFiltersCollapsed ? '⌄' : '⌃';
+});
 
 function openSpellDetail(id, aux) {
-  const s = state.spells.find(x => x.id === id);
+  const s = state.spells.find(x => String(x.id) === String(id));
   const open = aux ? openAuxModal : openModal;
   const close = aux ? closeAuxModal : closeModal;
   playPageTurn();
   const editBtn = (s.custom && !aux) ? `<button class="secondary block" id="editSpell">Редактировать</button><button class="danger block" id="deleteSpell">Удалить</button>` : '';
   open(s.name, `
-    <div class="meta" style="color:var(--text-dim);margin-bottom:8px">${escapeHtml(s.school)} · ${s.level === 0 ? 'Заговор' : 'Уровень ' + s.level}${s.ritual ? ' · Ритуал' : ''}</div>
-    <div class="row" style="margin-bottom:8px;font-size:13px">
-      <div>⏱ ${escapeHtml(s.time)}</div>
-      <div>🎯 ${escapeHtml(s.range)}</div>
-    </div>
-    <div class="row" style="margin-bottom:8px;font-size:13px">
-      <div>🗣 ${escapeHtml(s.components)}</div>
-      <div>⏳ ${escapeHtml(s.duration)}${s.concentration ? ' (конц.)' : ''}</div>
-    </div>
-    <div class="meta" style="margin-bottom:8px">Классы: ${escapeHtml(s.classes.join(', '))}</div>
-    <div style="white-space:pre-wrap">${escapeHtml(s.description || '')}</div>
+    <div style="font-size:20px;font-weight:700;text-transform:uppercase;margin-bottom:3px">${escapeHtml(s.name)}</div>
+    <div class="meta" style="color:var(--text-dim);margin-bottom:12px">${escapeHtml(s.school)} · ${s.level === 0 ? 'Заговор' : 'Уровень ' + s.level} · ${escapeHtml(s.classes.join(', '))} · Ред. ${escapeHtml(s.edition)}</div>
+    ${s.ritual ? '<div class="spell-ritual-label">Ритуал</div>' : ''}
+    <div class="spell-detail-line"><b>Время кастования:</b> ${escapeHtml(s.time)}</div>
+    <div class="spell-detail-line"><b>Расстояние:</b> ${escapeHtml(s.range)}</div>
+    <div class="spell-detail-line"><b>Компоненты:</b> ${escapeHtml(formatSpellComponents(s))}${s.materialDescription ? ` (${escapeHtml(s.materialDescription)})` : ''}</div>
+    <div class="spell-detail-line"><b>Длительность:</b> ${escapeHtml(s.duration)}${s.concentration ? ' (концентрация)' : ''}</div>
+    <div class="spell-detail-description">${escapeHtml(s.description || '')}</div>
+    ${s.atHigherLevels ? `<div class="spell-detail-description spell-detail-higher"><b>На высших уровнях:</b><br>${escapeHtml(s.atHigherLevels)}</div>` : ''}
+    <div class="meta spell-detail-source">Источник: ${escapeHtml(s.source || '—')}</div>
     ${editBtn}
   `);
   if (s.custom && !aux) {
@@ -1816,12 +1898,13 @@ function openSpellDetail(id, aux) {
 }
 
 function openSpellForm(existing) {
-  const s = existing || { id: uid('sp'), name: '', level: 1, school: SPELL_SCHOOLS[0], time: '1 действие', range: '', components: 'В, С', duration: 'Мгновенно', concentration: false, ritual: false, classes: [], description: '', custom: true };
+  const s = normalizeSpell(existing || { id: uid('sp'), name: '', level: 1, school: SPELL_SCHOOLS[0], time: '1 действие', range: '', components: '', componentFlags: { verbal: true, somatic: true, material: false }, materialDescription: '', duration: 'Мгновенно', concentration: false, ritual: false, classes: [], description: '', atHigherLevels: '', source: 'HOMEBREW', edition: '14', custom: true });
   const levelOptions = Object.keys(SPELL_LEVEL_LABELS).map(l => `<option value="${l}" ${String(s.level) === l ? 'selected' : ''}>${SPELL_LEVEL_LABELS[l]}</option>`).join('');
   const schoolOptions = SPELL_SCHOOLS.map(sc => `<option ${sc === s.school ? 'selected' : ''}>${sc}</option>`).join('');
   const classChips = DEFAULT_CLASSES.map(c => `<button type="button" class="chip ${s.classes.includes(c) ? 'active' : ''}" data-c="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
   openModal(existing ? 'Редактировать заклинание' : 'Новое заклинание', `
-    <label>Название</label><input id="spName" value="${escapeAttr(s.name)}">
+    <label>ID</label><input id="spId" value="${escapeAttr(s.id)}" readonly>
+    <input id="spName" value="${escapeAttr(s.name)}" placeholder="Название">
     <div class="row">
       <div><label>Уровень</label><select id="spLevel">${levelOptions}</select></div>
       <div><label>Школа</label><select id="spSchool">${schoolOptions}</select></div>
@@ -1830,10 +1913,16 @@ function openSpellForm(existing) {
       <div><label>Время накладывания</label><input id="spTime" value="${escapeAttr(s.time)}"></div>
       <div><label>Дистанция</label><input id="spRange" value="${escapeAttr(s.range)}"></div>
     </div>
-    <div class="row">
-      <div><label>Компоненты</label><input id="spComponents" value="${escapeAttr(s.components)}"></div>
-      <div><label>Длительность</label><input id="spDuration" value="${escapeAttr(s.duration)}"></div>
+    <label>Компоненты</label>
+    <div class="chip-row" id="spComponentChips">
+      <label class="spell-component-option"><input type="checkbox" id="spComponentV" ${s.componentFlags.verbal ? 'checked' : ''}> В</label>
+      <label class="spell-component-option"><input type="checkbox" id="spComponentS" ${s.componentFlags.somatic ? 'checked' : ''}> С</label>
+      <label class="spell-component-option"><input type="checkbox" id="spComponentM" ${s.componentFlags.material ? 'checked' : ''}> М</label>
     </div>
+    <input id="spMaterialDescription" value="${escapeAttr(s.materialDescription)}" placeholder="Описание материального компонента (необязательно)" style="${s.componentFlags.material ? '' : 'display:none'}">
+    <label>Длительность</label><input id="spDuration" value="${escapeAttr(s.duration)}">
+    <label>Источник</label><select id="spSource">${SPELL_SOURCES.map(source => `<option value="${source}" ${source === s.source ? 'selected' : ''}>${source}</option>`).join('')}</select>
+    <label>Редакция</label><select id="spEdition">${SPELL_EDITIONS.map(edition => `<option value="${edition}" ${edition === s.edition ? 'selected' : ''}>${edition}</option>`).join('')}</select>
     <div class="row" style="margin-bottom:10px">
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text)"><input type="checkbox" id="spConc" style="width:auto;margin:0" ${s.concentration ? 'checked' : ''}> Концентрация</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text)"><input type="checkbox" id="spRitual" style="width:auto;margin:0" ${s.ritual ? 'checked' : ''}> Ритуал</label>
@@ -1841,9 +1930,15 @@ function openSpellForm(existing) {
     <label>Классы (нажмите, чтобы отметить)</label>
     <div class="chip-row" id="spClassChips">${classChips}</div>
     <label>Описание</label><textarea id="spDesc">${escapeHtml(s.description)}</textarea>
+    <label>Описание на высших уровнях</label><textarea id="spHigherDesc">${escapeHtml(s.atHigherLevels)}</textarea>
     <button class="primary block" id="saveSpell">Сохранить</button>
   `);
   const selectedClasses = new Set(s.classes);
+  const materialCheckbox = document.getElementById('spComponentM');
+  const materialDescription = document.getElementById('spMaterialDescription');
+  materialCheckbox.addEventListener('change', () => {
+    materialDescription.style.display = materialCheckbox.checked ? '' : 'none';
+  });
   document.getElementById('spClassChips').querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', () => {
       const c = chip.dataset.c;
@@ -1852,17 +1947,25 @@ function openSpellForm(existing) {
     });
   });
   document.getElementById('saveSpell').addEventListener('click', () => {
-    s.name = document.getElementById('spName').value.trim() || 'Без названия';
+    s.name = document.getElementById('spName').value.trim();
+    s.source = document.getElementById('spSource').value;
+    s.edition = document.getElementById('spEdition').value;
     s.level = parseInt(document.getElementById('spLevel').value);
     s.school = document.getElementById('spSchool').value;
     s.time = document.getElementById('spTime').value.trim();
     s.range = document.getElementById('spRange').value.trim();
-    s.components = document.getElementById('spComponents').value.trim();
+    s.componentFlags = {
+      verbal: document.getElementById('spComponentV').checked,
+      somatic: document.getElementById('spComponentS').checked,
+      material: document.getElementById('spComponentM').checked
+    };
+    s.materialDescription = document.getElementById('spMaterialDescription').value.trim();
     s.duration = document.getElementById('spDuration').value.trim();
     s.concentration = document.getElementById('spConc').checked;
     s.ritual = document.getElementById('spRitual').checked;
     s.classes = Array.from(selectedClasses);
     s.description = document.getElementById('spDesc').value;
+    s.atHigherLevels = document.getElementById('spHigherDesc').value;
     s.custom = true;
     if (!state.spells.find(x => x.id === s.id)) state.spells.push(s);
     saveState();
@@ -1881,7 +1984,7 @@ function renderCharSpells(c) {
     return;
   }
   wrap.innerHTML = c.knownSpells.map((spellId, idx) => {
-    const s = state.spells.find(x => x.id === spellId);
+    const s = state.spells.find(x => String(x.id) === String(spellId));
     if (!s) return '';
     return `
       <div class="inv-item">

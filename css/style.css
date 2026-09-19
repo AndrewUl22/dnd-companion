@@ -318,6 +318,59 @@ nav.tabbar button.active { color: var(--accent); }
   box-shadow: 0 3px 10px #00000030;
 }
 
+.spell-detail-line {
+  margin: 5px 0;
+  font-size: 13px;
+}
+
+.spell-filters-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 8px;
+  color: var(--accent);
+  cursor: pointer;
+  user-select: none;
+}
+
+
+.spell-component-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  margin: 0;
+  color: var(--text);
+}
+
+.spell-component-option input {
+  width: auto;
+  margin: 0;
+}
+
+.spell-ritual-label {
+  color: #b56cff;
+  font-size: 13px;
+  font-weight: 600;
+  margin: -5px 0 9px;
+}
+
+.spell-detail-description {
+  margin-top: 14px;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.spell-detail-higher {
+  margin-top: 18px;
+  padding-top: 10px;
+  border-top: 1px solid var(--card-border);
+}
+
+.spell-detail-source {
+  margin: 14px 0 10px;
+}
+
 .card h3 {
   margin: 0 0 8px;
   font-family: 'Cinzel', serif;
