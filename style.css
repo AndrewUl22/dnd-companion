@@ -318,6 +318,59 @@ nav.tabbar button.active { color: var(--accent); }
   box-shadow: 0 3px 10px #00000030;
 }
 
+.spell-detail-line {
+  margin: 5px 0;
+  font-size: 13px;
+}
+
+.spell-filters-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 8px;
+  color: var(--accent);
+  cursor: pointer;
+  user-select: none;
+}
+
+
+.spell-component-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  margin: 0;
+  color: var(--text);
+}
+
+.spell-component-option input {
+  width: auto;
+  margin: 0;
+}
+
+.spell-ritual-label {
+  color: #b56cff;
+  font-size: 13px;
+  font-weight: 600;
+  margin: -5px 0 9px;
+}
+
+.spell-detail-description {
+  margin-top: 14px;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.spell-detail-higher {
+  margin-top: 18px;
+  padding-top: 10px;
+  border-top: 1px solid var(--card-border);
+}
+
+.spell-detail-source {
+  margin: 14px 0 10px;
+}
+
 .card h3 {
   margin: 0 0 8px;
   font-family: 'Cinzel', serif;
@@ -526,6 +579,44 @@ input[type="checkbox"]:checked::after {
   100% { transform: scale(1) rotate(0deg); }
 }
 
+/* Трёхпозиционный переключатель владения навыком: пусто -> владение (✓) ->
+   компетенция (★, двойной бонус мастерства). Тот же язык, что и у обычных
+   чекбоксов выше, только с третьим состоянием поверх. */
+.skill-state {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-radius: 7px;
+  border: 2px solid var(--card-border);
+  background: var(--bg-elevated);
+  position: relative;
+  cursor: pointer;
+  margin: 0 6px 0 0;
+  padding: 0;
+  vertical-align: middle;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: #1b1530;
+  transition: transform .18s cubic-bezier(.4,1.8,.6,1), background .15s ease, border-color .12s ease, box-shadow .15s ease;
+}
+.skill-state:active { transform: scale(0.6); }
+.skill-state.prof {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.skill-state.expertise {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent);
+}
+
 /* ===== Анимация "приседания" на ховер/тап для интерактивных элементов ===== */
 button, .list-item, .chip, .equip-btn, .death-dot, .avatar-circle {
   transition: transform .12s ease, filter .12s ease, box-shadow .12s ease;
@@ -570,6 +661,7 @@ button.block { width: 100%; margin-bottom: 8px; }
   border-radius: 12px;
   padding: 8px;
   text-align: center;
+  cursor: pointer;
 }
 .ability-box .label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; }
 .ability-box .score { font-size: 20px; font-weight: 700; margin: 2px 0; }
@@ -666,6 +758,112 @@ button.block { width: 100%; margin-bottom: 8px; }
 .modal .close-x { background: none; border: none; color: var(--text-dim); font-size: 20px; cursor: pointer; }
 
 .chip-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 10px; }
+.sheet-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 4px 0 14px;
+}
+.sheet-tab-btn {
+  flex: 1;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  color: var(--text-dim);
+  border-radius: 10px;
+  padding: 9px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sheet-tab-btn.active {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+.sheet-tab-panel { display: none; }
+.sheet-tab-panel.active { display: block; }
+.features-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.features-section-header h3 { margin-bottom: 0; }
+.features-section-header h3,
+.collapsible-section-title { cursor: pointer; user-select: none; }
+.collapse-indicator {
+  color: var(--text-dim);
+  font-size: 16px;
+  margin-left: 5px;
+}
+.collapsible-section-title { display: flex; justify-content: space-between; align-items: center; }
+.features-section-collapsed #featuresContent { display: none; }
+.initiative-roll-box { cursor: pointer; }
+.initiative-roll-box:active { transform: scale(.98); }
+.info-text-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+}
+.info-text-title:first-child { margin-top: 0; }
+.info-text-controls { display: none; }
+.info-text-editor[contenteditable="false"] { cursor: default; }
+.info-save-btn { margin: 0 0 8px; }
+.feature-item {
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  margin: 8px 0;
+  background: var(--bg-elevated);
+}
+.feature-item.dragging { opacity: .45; }
+.feature-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  cursor: pointer;
+}
+.feature-item-title { flex: 1; min-width: 0; }
+.feature-item-source {
+  display: block;
+  color: var(--text-dim);
+  font-size: 12px;
+  margin-top: 2px;
+}
+.feature-edit-btn {
+  flex: none;
+  background: none;
+  border: 0;
+  color: var(--text-dim);
+  font-size: 17px;
+  cursor: pointer;
+  padding: 2px 5px;
+}
+.feature-delete-btn {
+  flex: none;
+  background: none;
+  border: 0;
+  color: #e05b5b;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 5px;
+}
+.feature-item-body { padding: 0 10px 10px; }
+.feature-edit-grid { display: grid; gap: 8px; }
+.feature-rich-toolbar { margin-top: 2px; }
+.feature-description-editor {
+  min-height: 110px;
+  margin-bottom: 0;
+}
+.feature-save-btn { margin-top: 8px; }
+.feature-drag-handle {
+  color: var(--text-dim);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
 .chip {
   flex: none;
   background: var(--bg-elevated);
@@ -719,6 +917,59 @@ button.block { width: 100%; margin-bottom: 8px; }
   transition: opacity .2s;
 }
 .toast.show { opacity: 1; }
+
+.roll-result-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.roll-result-overlay.hidden { display: none; }
+.roll-result-card {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--accent);
+  border-radius: 16px;
+  padding: 22px 28px 20px;
+  text-align: center;
+  max-width: 320px;
+  width: 100%;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+.roll-result-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+}
+.roll-result-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin: 4px 22px 0;
+}
+.roll-result-total {
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--accent);
+  margin-top: 10px;
+}
+.roll-result-detail {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 8px;
+}
 
 .inv-item {
   display: flex;
@@ -1030,9 +1281,25 @@ button.block { width: 100%; margin-bottom: 8px; }
   width: 100%; height: 100%;
   border-radius: inherit;
   object-fit: cover;
+  image-rendering: -webkit-optimize-contrast;
 }
 .avatar-circle.small img { width: 100%; height: 100%; }
 .avatar-circle svg { width: 60%; height: 60%; }
+.avatar-video-slot {
+  display: block;
+  width: 100%; height: 100%;
+  border-radius: inherit;
+  overflow: hidden;
+}
+/* Единый стиль для видео (mp4/webm) и GIF/картинок, сохранённых напрямую как Blob */
+.avatar-video-slot video,
+.avatar-video-slot img {
+  width: 100%; height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+  display: block;
+  image-rendering: -webkit-optimize-contrast;
+}
 
 .expanded-editor-textarea {
   width: 100%;
