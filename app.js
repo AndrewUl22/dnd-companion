@@ -14,7 +14,7 @@ function loadState() {
     customRaces: [],
     customClasses: [],
     battle: { combatants: [], currentIndex: 0, round: 1 },
-    settings: { theme: 'dark', soundEnabled: true, diceSkin: 'ruby' }
+    settings: { theme: 'dark', soundEnabled: true, diceSkin: 'ruby', showDefaultBestiary: false, showDefaultItems: false, showDefaultSpells: false }
   };
 }
 
@@ -31,6 +31,7 @@ if (!state.settings) state.settings = { theme: 'dark', soundEnabled: true, diceS
 if (!state.settings.diceSkin) state.settings.diceSkin = 'ruby';
 if (state.settings.showDefaultBestiary === undefined) state.settings.showDefaultBestiary = false;
 if (state.settings.showDefaultItems === undefined) state.settings.showDefaultItems = false;
+if (state.settings.showDefaultSpells === undefined) state.settings.showDefaultSpells = false;
 if (state.settings.theme === 'coffee') state.settings.theme = 'undead'; // миграция: тему переименовали в "Нежить"
 
 function applyTheme() {
@@ -57,6 +58,10 @@ function visibleBestiary() {
 
 function visibleItems() {
   return state.items.filter(i => i.custom || state.settings.showDefaultItems);
+}
+
+function visibleSpells() {
+  return state.spells.filter(s => s.custom || state.settings.showDefaultSpells);
 }
 
 // ==================== UTIL ====================
@@ -1674,7 +1679,7 @@ function openBestiaryForm(existing) {
   renderBeastSpellsInForm();
 
   document.getElementById('bAddSpellBtn').addEventListener('click', () => {
-    const sorted = state.spells.slice().sort((a, b2) => a.level - b2.level || a.name.localeCompare(b2.name, 'ru'));
+    const sorted = visibleSpells().slice().sort((a, b2) => a.level - b2.level || a.name.localeCompare(b2.name, 'ru'));
     openListPicker(true, 'Выберите заклинание', sorted,
       (sp) => `<div style="flex:1"><div>${escapeHtml(sp.name)}</div><div class="meta">${escapeHtml(sp.school)}</div></div><span class="badge">${sp.level === 0 ? 'Загов.' : 'Ур.' + sp.level}</span>`,
       (sp) => {
@@ -1745,7 +1750,7 @@ function renderSpellFilterChips() {
 }
 
 function filteredSpells() {
-  return state.spells.filter(s => {
+  return visibleSpells().filter(s => {
     if (spellLevelFilter !== 'Все' && s.level !== spellLevelFilter) return false;
     if (spellClassFilter !== 'Все' && !s.classes.includes(spellClassFilter)) return false;
     if (spellSchoolFilter !== 'Все' && s.school !== spellSchoolFilter) return false;
@@ -1902,7 +1907,7 @@ function renderCharSpells(c) {
 }
 
 document.getElementById('addSpellFromCatalog').addEventListener('click', () => {
-  const sorted = state.spells.slice().sort((a, b) => a.level - b.level || a.name.localeCompare(b.name, 'ru'));
+  const sorted = visibleSpells().slice().sort((a, b) => a.level - b.level || a.name.localeCompare(b.name, 'ru'));
   openListPicker(false, 'Выберите заклинание', sorted,
     (s) => `<div style="flex:1"><div>${escapeHtml(s.name)}</div><div class="meta">${escapeHtml(s.school)}${s.concentration ? ' · конц.' : ''}</div></div><span class="badge">${s.level === 0 ? 'Загов.' : 'Ур.' + s.level}</span>`,
     (s) => {
@@ -2455,6 +2460,14 @@ showDefaultItems.addEventListener('change', () => {
   state.settings.showDefaultItems = showDefaultItems.checked;
   saveState();
   renderItems();
+});
+
+const showDefaultSpells = document.getElementById('showDefaultSpells');
+showDefaultSpells.checked = state.settings.showDefaultSpells;
+showDefaultSpells.addEventListener('change', () => {
+  state.settings.showDefaultSpells = showDefaultSpells.checked;
+  saveState();
+  renderSpells();
 });
 
 // ==================== DICE ROLLER (SVG-кубики со скинами) ====================
