@@ -135,7 +135,7 @@
       </div>
       <div class="meta" style="margin:-6px 0 10px">Итоговый КД (с учётом экипировки): <b id="totalACDisplay" style="color:var(--accent)">10</b></div>
       <div class="row">
-        <div class="ability-box" style="padding:10px">
+        <div class="ability-box initiative-roll-box" id="initiativeRollBox" style="padding:10px" title="Бросить инициативу">
           <div class="label">Инициатива</div>
           <div class="score" id="initiativeDisplay">+0</div>
         </div>
@@ -224,21 +224,13 @@
 
     <div class="sheet-tab-panel" data-tab="info">
     <div class="card">
-      <h3>Классовые умения <button type="button" class="expand-btn" data-target="sheetClassFeatures">⤢ Развернуть</button></h3>
-      <div class="rich-toolbar" data-target="sheetClassFeatures"></div>
-      <div class="rich-editable" id="sheetClassFeatures" contenteditable="true" data-placeholder="Умения класса, полученные на текущем уровне"></div>
-    </div>
-
-    <div class="card">
-      <h3>Расовые особенности <button type="button" class="expand-btn" data-target="sheetRacialTraits">⤢ Развернуть</button></h3>
-      <div class="rich-toolbar" data-target="sheetRacialTraits"></div>
-      <div class="rich-editable" id="sheetRacialTraits" contenteditable="true" data-placeholder="Особенности расы"></div>
-    </div>
-
-    <div class="card">
-      <h3>Черты <button type="button" class="expand-btn" data-target="sheetFeats">⤢ Развернуть</button></h3>
-      <div class="rich-toolbar" data-target="sheetFeats"></div>
-      <div class="rich-editable" id="sheetFeats" contenteditable="true" data-placeholder="Черты персонажа"></div>
+      <div class="features-section-header">
+        <h3 id="featuresToggleBtn">Особенности и умения <span class="collapse-indicator">⌃</span></h3>
+      </div>
+      <div id="featuresContent">
+        <div id="featuresList"></div>
+        <button type="button" class="secondary block" id="addFeatureBtn">+ Добавить новую</button>
+      </div>
     </div>
     </div>
 
@@ -305,19 +297,33 @@
 
     <div class="sheet-tab-panel" data-tab="info">
     <div class="card">
-      <h3>Внешность и предыстория</h3>
-      <label style="display:flex;justify-content:space-between;align-items:center">Внешность <button type="button" class="expand-btn" data-target="sheetAppearance">⤢</button></label>
-      <div class="rich-toolbar" data-target="sheetAppearance"></div>
-      <div class="rich-editable" id="sheetAppearance" contenteditable="true" data-placeholder="Как выглядит персонаж"></div>
-      <label style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">Предыстория и личность <button type="button" class="expand-btn" data-target="sheetBackstory">⤢</button></label>
-      <div class="rich-toolbar" data-target="sheetBackstory"></div>
-      <div class="rich-editable" id="sheetBackstory" contenteditable="true" data-placeholder="История персонажа, черты характера, идеалы, узы, слабости"></div>
+      <h3 class="collapsible-section-title" data-collapse-target="infoBackgroundContent">Внешность и предыстория <span class="collapse-indicator">⌃</span></h3>
+      <div id="infoBackgroundContent">
+        <label class="info-text-title">Внешность <button type="button" class="feature-edit-btn info-edit-btn" data-info-edit="sheetAppearance" title="Редактировать">⚙</button></label>
+        <div class="info-text-controls" data-info-controls="sheetAppearance">
+          <div class="rich-toolbar" data-target="sheetAppearance"></div>
+          <button type="button" class="primary block info-save-btn" data-info-save="sheetAppearance">✓ Сохранить</button>
+        </div>
+        <div class="rich-editable info-text-editor" id="sheetAppearance" contenteditable="false" data-placeholder="Как выглядит персонаж"></div>
+        <label class="info-text-title">Предыстория и личность <button type="button" class="feature-edit-btn info-edit-btn" data-info-edit="sheetBackstory" title="Редактировать">⚙</button></label>
+        <div class="info-text-controls" data-info-controls="sheetBackstory">
+          <div class="rich-toolbar" data-target="sheetBackstory"></div>
+          <button type="button" class="primary block info-save-btn" data-info-save="sheetBackstory">✓ Сохранить</button>
+        </div>
+        <div class="rich-editable info-text-editor" id="sheetBackstory" contenteditable="false" data-placeholder="История персонажа, черты характера, идеалы, узы, слабости"></div>
+      </div>
     </div>
 
     <div class="card">
-      <h3>Заметки <button type="button" class="expand-btn" data-target="sheetNotes">⤢ Развернуть</button></h3>
-      <div class="rich-toolbar" data-target="sheetNotes"></div>
-      <div class="rich-editable" id="sheetNotes" contenteditable="true" data-placeholder="Свободные заметки"></div>
+      <h3 class="collapsible-section-title" data-collapse-target="infoNotesContent">Заметки <span class="collapse-indicator">⌃</span></h3>
+      <div id="infoNotesContent">
+        <div class="info-text-title"><span>Текст заметок</span><button type="button" class="feature-edit-btn info-edit-btn" data-info-edit="sheetNotes" title="Редактировать">⚙</button></div>
+        <div class="info-text-controls" data-info-controls="sheetNotes">
+          <div class="rich-toolbar" data-target="sheetNotes"></div>
+          <button type="button" class="primary block info-save-btn" data-info-save="sheetNotes">✓ Сохранить</button>
+        </div>
+        <div class="rich-editable info-text-editor" id="sheetNotes" contenteditable="false" data-placeholder="Свободные заметки"></div>
+      </div>
     </div>
     </div>
   </section>
@@ -436,11 +442,23 @@
       <p style="color:var(--text-dim);font-size:13px;margin-top:0">
         Персонажи, а также добавленные вами существа и предметы хранятся прямо на устройстве.
       </p>
+      <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text)">
+        <input type="checkbox" id="showDefaultBestiary" style="width:auto;margin:0">
+        Показывать встроенных монстров
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text);margin-top:8px">
+        <input type="checkbox" id="showDefaultItems" style="width:auto;margin:0">
+        Показывать встроенные предметы
+      </label>
     </div>
     <div class="card">
       <h3>Импорт / Экспорт</h3>
       <button class="primary block" id="exportBtn">⬇ Экспортировать всё в файл</button>
-      <button class="secondary block" id="importBtn">⬆ Импортировать из файла</button>
+      <button class="secondary block" id="exportBestiaryBtn">⬇ Экспортировать бестиарий</button>
+      <button class="secondary block" id="exportCharactersBtn">⬇ Экспортировать персонажей</button>
+      <button class="secondary block" id="exportItemsBtn">⬇ Экспортировать предметы</button>
+      <button class="secondary block" id="exportSpellsBtn">⬇ Экспортировать заклинания</button>
+      <button class="primary block" id="importBtn">⬆ Импортировать из файла</button>
       <input type="file" id="importFile" accept="application/json" style="display:none">
       <p style="color:var(--text-dim);font-size:12px">
         Экспорт сохранит персонажей, добавленных существ и предметы в один .json файл — им можно поделиться
