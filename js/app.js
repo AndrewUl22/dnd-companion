@@ -197,6 +197,33 @@ function showToast(msg) {
   showToast._timer = setTimeout(() => t.classList.remove('show'), 1800);
 }
 
+function includesSearchText(value, query) {
+  return !query || String(value || '').toLocaleLowerCase('ru-RU').includes(String(query).toLocaleLowerCase('ru-RU'));
+}
+
+function renderFilterChips({ elementId, values, selected, dataKey, onSelect, formatLabel = value => escapeHtml(value) }) {
+  const wrap = document.getElementById(elementId);
+  if (!wrap) return;
+  wrap.innerHTML = values.map(value => `
+    <button type="button" class="chip ${String(value) === String(selected) ? 'active' : ''}" data-${dataKey}="${escapeAttr(value)}">
+      ${formatLabel(value)}
+    </button>
+  `).join('');
+  wrap.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => onSelect(chip.dataset[dataKey]));
+  });
+}
+
+function renderDiceHistory(container) {
+  if (!container) return;
+  container.innerHTML = diceHistory.slice(0, 12).map(history => {
+    const detail = history.rolls
+      ? ` (${history.rolls.join('+')}${history.mod ? (history.mod > 0 ? '+' + history.mod : history.mod) : ''})`
+      : '';
+    return `<div class="skill-row"><span>${escapeHtml(history.label)}</span><span class="mod">${history.total}${detail}</span></div>`;
+  }).join('') || '<div class="empty-state" style="padding:10px 0">Пока не было бросков</div>';
+}
+
 // ==================== NAVIGATION ====================
 function switchView(view) {
   activeView = view;
@@ -1864,46 +1891,53 @@ function crToNumber(cr) {
 
 function renderBestiaryFilterChips() {
   const source = visibleBestiary();
-  const types = ['Все', ...new Set(source.map(b => b.type))];
-  const wrap = document.getElementById('bestiaryFilter');
-  wrap.innerHTML = types.map(t => `<button class="chip ${t === bestiaryFilter ? 'active' : ''}" data-t="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('');
-  wrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { bestiaryFilter = chip.dataset.t; renderBestiary(); });
+  renderFilterChips({
+    elementId: 'bestiaryFilter',
+    values: ['Все', ...new Set(source.map(b => b.type))],
+    selected: bestiaryFilter,
+    dataKey: 't',
+    onSelect: value => { bestiaryFilter = value; renderBestiary(); }
   });
 
   // Подтип (например, у "Гуманоид" бывают "гоблиноид", "орк" и т.п.) —
   // отдельный фильтр, чтобы существа с общим типом, но разными подтипами,
   // не путались друг с другом в списке "Тип".
-  const subtypes = ['Все', ...new Set(source.map(b => b.subtype).filter(Boolean))];
-  const subtypeWrap = document.getElementById('bestiarySubtypeFilter');
-  subtypeWrap.innerHTML = subtypes.map(st => `<button class="chip ${st === bestiarySubtypeFilter ? 'active' : ''}" data-st="${escapeHtml(st)}">${escapeHtml(st)}</button>`).join('');
-  subtypeWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { bestiarySubtypeFilter = chip.dataset.st; renderBestiary(); });
+  renderFilterChips({
+    elementId: 'bestiarySubtypeFilter',
+    values: ['Все', ...new Set(source.map(b => b.subtype).filter(Boolean))],
+    selected: bestiarySubtypeFilter,
+    dataKey: 'st',
+    onSelect: value => { bestiarySubtypeFilter = value; renderBestiary(); }
   });
 
-  const crWrap = document.getElementById('bestiaryCrFilter');
   const crValues = ['Все', ...new Set(source.map(b => b.cr).filter(Boolean))].sort((a, b) => {
     if (a === 'Все') return -1;
     if (b === 'Все') return 1;
     return crToNumber(a) - crToNumber(b);
   });
-  crWrap.innerHTML = crValues.map(cr => `<button class="chip ${cr === bestiaryCrFilter ? 'active' : ''}" data-cr="${escapeHtml(cr)}">${cr === 'Все' ? 'Все' : 'КО ' + escapeHtml(cr)}</button>`).join('');
-  crWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { bestiaryCrFilter = chip.dataset.cr; renderBestiary(); });
+  renderFilterChips({
+    elementId: 'bestiaryCrFilter',
+    values: crValues,
+    selected: bestiaryCrFilter,
+    dataKey: 'cr',
+    formatLabel: cr => cr === 'Все' ? 'Все' : 'КО ' + escapeHtml(cr),
+    onSelect: value => { bestiaryCrFilter = value; renderBestiary(); }
   });
 
-  const sizeWrap = document.getElementById('bestiarySizeFilter');
-  const sizeValues = ['Все', ...CREATURE_SIZES.filter(s => source.some(b => b.size === s))];
-  sizeWrap.innerHTML = sizeValues.map(s => `<button class="chip ${s === bestiarySizeFilter ? 'active' : ''}" data-s="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('');
-  sizeWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { bestiarySizeFilter = chip.dataset.s; renderBestiary(); });
+  renderFilterChips({
+    elementId: 'bestiarySizeFilter',
+    values: ['Все', ...CREATURE_SIZES.filter(size => source.some(b => b.size === size))],
+    selected: bestiarySizeFilter,
+    dataKey: 's',
+    onSelect: value => { bestiarySizeFilter = value; renderBestiary(); }
   });
 
-  const habWrap = document.getElementById('bestiaryHabitatFilter');
-  const habValues = ['Все', ...HABITATS.filter(h => source.some(b => (b.habitat || []).includes(h)))];
-  habWrap.innerHTML = habValues.map(h => `<button class="chip ${h === bestiaryHabitatFilter ? 'active' : ''}" data-h="${escapeHtml(h)}">${escapeHtml(h)}</button>`).join('');
-  habWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { bestiaryHabitatFilter = chip.dataset.h; renderBestiary(); });
+  renderFilterChips({
+    elementId: 'bestiaryHabitatFilter',
+    values: ['Все', ...HABITATS.filter(habitat => source.some(b => (b.habitat || []).includes(habitat)))],
+    selected: bestiaryHabitatFilter,
+    dataKey: 'h',
+    onSelect: value => { bestiaryHabitatFilter = value; renderBestiary(); }
   });
 }
 
@@ -1917,7 +1951,7 @@ function renderBestiary() {
       (bestiaryCrFilter === 'Все' || b.cr === bestiaryCrFilter) &&
       (bestiarySizeFilter === 'Все' || b.size === bestiarySizeFilter) &&
       (bestiaryHabitatFilter === 'Все' || (b.habitat || []).includes(bestiaryHabitatFilter)) &&
-      (!bestiarySearchQuery || b.name.toLowerCase().includes(bestiarySearchQuery.toLowerCase()))
+      includesSearchText(b.name, bestiarySearchQuery)
     )
     .sort((a, b) => crToNumber(a.cr) - crToNumber(b.cr));
   if (!items.length) { list.innerHTML = '<div class="empty-state">Ничего не найдено</div>'; return; }
@@ -2139,40 +2173,45 @@ const SPELL_LEVEL_LABELS = { 0: 'Заговор', 1: '1', 2: '2', 3: '3', 4: '4'
 function renderSpellFilterChips() {
   const levelWrap = document.getElementById('spellLevelFilter');
   const levels = ['Все', ...Array.from(new Set(visibleSpells().map(s => s.level))).sort((a, b) => a - b)];
-  levelWrap.innerHTML = levels.map(l => {
-    const label = l === 'Все' ? 'Все' : SPELL_LEVEL_LABELS[l];
-    return `<button class="chip ${String(l) === String(spellLevelFilter) ? 'active' : ''}" data-l="${l}">${label}</button>`;
-  }).join('');
-  levelWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { spellLevelFilter = chip.dataset.l === 'Все' ? 'Все' : parseInt(chip.dataset.l); renderSpells(); });
+  renderFilterChips({
+    elementId: 'spellLevelFilter',
+    values: levels,
+    selected: spellLevelFilter,
+    dataKey: 'l',
+    formatLabel: level => level === 'Все' ? 'Все' : SPELL_LEVEL_LABELS[level],
+    onSelect: value => { spellLevelFilter = value === 'Все' ? 'Все' : parseInt(value); renderSpells(); }
   });
 
-  const classWrap = document.getElementById('spellClassFilter');
-  const classes = ['Все', ...DEFAULT_CLASSES];
-  classWrap.innerHTML = classes.map(c => `<button class="chip ${c === spellClassFilter ? 'active' : ''}" data-c="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
-  classWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { spellClassFilter = chip.dataset.c; renderSpells(); });
+  renderFilterChips({
+    elementId: 'spellClassFilter',
+    values: ['Все', ...DEFAULT_CLASSES],
+    selected: spellClassFilter,
+    dataKey: 'c',
+    onSelect: value => { spellClassFilter = value; renderSpells(); }
   });
 
-  const schoolWrap = document.getElementById('spellSchoolFilter');
-  const schools = ['Все', ...SPELL_SCHOOLS];
-  schoolWrap.innerHTML = schools.map(s => `<button class="chip ${s === spellSchoolFilter ? 'active' : ''}" data-s="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('');
-  schoolWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { spellSchoolFilter = chip.dataset.s; renderSpells(); });
+  renderFilterChips({
+    elementId: 'spellSchoolFilter',
+    values: ['Все', ...SPELL_SCHOOLS],
+    selected: spellSchoolFilter,
+    dataKey: 's',
+    onSelect: value => { spellSchoolFilter = value; renderSpells(); }
   });
 
-  const sourceWrap = document.getElementById('spellSourceFilter');
-  const sources = ['Все', ...SPELL_SOURCES];
-  sourceWrap.innerHTML = sources.map(source => `<button class="chip ${source === spellSourceFilter ? 'active' : ''}" data-source="${source}">${source}</button>`).join('');
-  sourceWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { spellSourceFilter = chip.dataset.source; renderSpells(); });
+  renderFilterChips({
+    elementId: 'spellSourceFilter',
+    values: ['Все', ...SPELL_SOURCES],
+    selected: spellSourceFilter,
+    dataKey: 'source',
+    onSelect: value => { spellSourceFilter = value; renderSpells(); }
   });
 
-  const editionWrap = document.getElementById('spellEditionFilter');
-  const editions = ['Все', ...SPELL_EDITIONS];
-  editionWrap.innerHTML = editions.map(edition => `<button class="chip ${edition === spellEditionFilter ? 'active' : ''}" data-edition="${edition}">${edition}</button>`).join('');
-  editionWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { spellEditionFilter = chip.dataset.edition; renderSpells(); });
+  renderFilterChips({
+    elementId: 'spellEditionFilter',
+    values: ['Все', ...SPELL_EDITIONS],
+    selected: spellEditionFilter,
+    dataKey: 'edition',
+    onSelect: value => { spellEditionFilter = value; renderSpells(); }
   });
 }
 
@@ -2183,7 +2222,7 @@ function filteredSpells() {
     if (spellSchoolFilter !== 'Все' && s.school !== spellSchoolFilter) return false;
     if (spellSourceFilter !== 'Все' && s.source !== spellSourceFilter) return false;
     if (spellEditionFilter !== 'Все' && s.edition !== spellEditionFilter) return false;
-    if (spellSearchQuery && !s.name.toLowerCase().includes(spellSearchQuery.toLowerCase())) return false;
+    if (!includesSearchText(s.name, spellSearchQuery)) return false;
     return true;
   }).sort((a, b) => a.level - b.level || a.name.localeCompare(b.name, 'ru'));
 }
@@ -2419,27 +2458,30 @@ document.getElementById('addSpellFromCatalog').addEventListener('click', () => {
 // ==================== ITEMS ====================
 function renderItemsFilterChips() {
   const source = visibleItems();
-  const types = ['Все', ...new Set(source.map(i => i.type))];
-  const wrap = document.getElementById('itemsFilter');
-  wrap.innerHTML = types.map(t => `<button class="chip ${t === itemsFilter ? 'active' : ''}" data-t="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('');
-  wrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { itemsFilter = chip.dataset.t; renderItems(); });
+  renderFilterChips({
+    elementId: 'itemsFilter',
+    values: ['Все', ...new Set(source.map(i => i.type))],
+    selected: itemsFilter,
+    dataKey: 't',
+    onSelect: value => { itemsFilter = value; renderItems(); }
   });
 
   // Подтип (например, у "Броня" бывают "лёгкая", "тяжёлая" и т.п.) — тот же
   // принцип, что и подтип в бестиарии.
-  const subtypes = ['Все', ...new Set(source.map(i => i.subtype).filter(Boolean))];
-  const subtypeWrap = document.getElementById('itemsSubtypeFilter');
-  subtypeWrap.innerHTML = subtypes.map(st => `<button class="chip ${st === itemsSubtypeFilter ? 'active' : ''}" data-st="${escapeHtml(st)}">${escapeHtml(st)}</button>`).join('');
-  subtypeWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { itemsSubtypeFilter = chip.dataset.st; renderItems(); });
+  renderFilterChips({
+    elementId: 'itemsSubtypeFilter',
+    values: ['Все', ...new Set(source.map(i => i.subtype).filter(Boolean))],
+    selected: itemsSubtypeFilter,
+    dataKey: 'st',
+    onSelect: value => { itemsSubtypeFilter = value; renderItems(); }
   });
 
-  const rarWrap = document.getElementById('itemsRarityFilter');
-  const rarValues = ['Все', ...RARITIES.filter(r => source.some(i => i.rarity === r))];
-  rarWrap.innerHTML = rarValues.map(r => `<button class="chip ${r === itemsRarityFilter ? 'active' : ''}" data-r="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join('');
-  rarWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { itemsRarityFilter = chip.dataset.r; renderItems(); });
+  renderFilterChips({
+    elementId: 'itemsRarityFilter',
+    values: ['Все', ...RARITIES.filter(rarity => source.some(i => i.rarity === rarity))],
+    selected: itemsRarityFilter,
+    dataKey: 'r',
+    onSelect: value => { itemsRarityFilter = value; renderItems(); }
   });
 }
 
@@ -2455,7 +2497,7 @@ function renderItems() {
       (itemsFilter === 'Все' || i.type === itemsFilter) &&
       (itemsSubtypeFilter === 'Все' || i.subtype === itemsSubtypeFilter) &&
       (itemsRarityFilter === 'Все' || i.rarity === itemsRarityFilter) &&
-      (!itemsSearchQuery || i.name.toLowerCase().includes(itemsSearchQuery.toLowerCase()))
+      includesSearchText(i.name, itemsSearchQuery)
     )
     .sort((a, b) => rarityToNumber(a.rarity) - rarityToNumber(b.rarity));
   if (!items.length) { list.innerHTML = '<div class="empty-state">Ничего не найдено</div>'; return; }
@@ -3307,9 +3349,6 @@ function renderDiceModal() {
     const grad = `linear-gradient(160deg, ${s.stops[0]}, ${s.stops[1]}, ${s.stops[2]})`;
     return `<button type="button" class="dice-skin-swatch ${currentDiceSkin() === id ? 'is-selected' : ''}" data-skin="${id}" style="background:${grad};border-color:${s.rim}" title="${s.label}"></button>`;
   }).join('');
-  const historyHtml = diceHistory.length
-    ? diceHistory.slice(0, 12).map(h => `<div class="skill-row"><span>${h.label}</span><span class="mod">${h.total}${h.rolls ? ' (' + h.rolls.join('+') + (h.mod ? (h.mod > 0 ? '+' + h.mod : h.mod) : '') + ')' : ''}</span></div>`).join('')
-    : '<div class="empty-state" style="padding:10px 0">Пока не было бросков</div>';
   openModal('Кубики', `
     <div class="chip-row dice-skin-row">${skinSwatches}</div>
     <div class="chip-row" id="diceButtons" style="flex-wrap:wrap">${buttons}</div>
@@ -3336,8 +3375,9 @@ function renderDiceModal() {
     </div>
     <button class="roll-dice-gold-btn" id="rollDiceBtn">⚅ Бросить</button>
     <div class="section-title" style="margin-top:10px">История</div>
-    <div id="diceHistoryList">${historyHtml}</div>
+    <div id="diceHistoryList"></div>
   `);
+  renderDiceHistory(document.getElementById('diceHistoryList'));
   renderDieDisplay(selectedDie === 100 ? 0 : selectedDie);
 
   document.querySelectorAll('.dice-skin-swatch').forEach(btn => {
@@ -3393,7 +3433,7 @@ function renderDiceModal() {
     playDiceRoll();
     animateDiceRoll(total, () => {
       diceHistory.unshift({ label, total, rolls, mod: modifier });
-      document.getElementById('diceHistoryList').innerHTML = diceHistory.slice(0, 12).map(h => `<div class="skill-row"><span>${h.label}</span><span class="mod">${h.total}${h.rolls.length > 1 || h.mod ? ' (' + h.rolls.join('+') + (h.mod ? (h.mod > 0 ? '+' + h.mod : h.mod) : '') + ')' : ''}</span></div>`).join('');
+      renderDiceHistory(document.getElementById('diceHistoryList'));
       const isCrit = selectedDie === 20 && rolls.length === 1 && rolls[0] === 20;
       const isFail = selectedDie === 20 && rolls.length === 1 && rolls[0] === 1;
       if (isCrit) triggerCritEffect('crit');
