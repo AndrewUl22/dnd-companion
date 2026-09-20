@@ -527,6 +527,9 @@ textarea { min-height: 110px; resize: vertical; }
   word-break: break-word;
   overflow-y: auto;
 }
+.rich-editable.auto-grow {
+  overflow-y: hidden;
+}
 .rich-editable:empty::before {
   content: attr(data-placeholder);
   color: var(--text-dim);
@@ -1296,6 +1299,20 @@ button.block { width: 100%; margin-bottom: 8px; }
   padding: 4px 2px;
   margin: 0;
   flex: none;
+}
+.custom-item-delete {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  flex: none;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+}
+.custom-item-delete:hover {
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .avatar-circle img {

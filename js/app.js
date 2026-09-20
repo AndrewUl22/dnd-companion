@@ -640,6 +640,7 @@ function newCharacter(name) {
     features: [],
     appearance: '', backstory: '',
     currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
+    customInventory: [],
     inventory: [],
     knownSpells: [],
     spells: '',
@@ -732,6 +733,13 @@ function migrateChar(c) {
   }));
   if (c.appearance === undefined) c.appearance = '';
   if (c.backstory === undefined) c.backstory = '';
+  if (!Array.isArray(c.customInventory)) c.customInventory = [];
+  c.customInventory = c.customInventory
+    .filter(item => item && typeof item === 'object')
+    .map(item => ({
+      name: String(item.name || ''),
+      qty: Math.max(0, parseInt(item.qty) || 0)
+    }));
   if (!c.currency) c.currency = { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 };
   return c;
 }
@@ -1034,7 +1042,9 @@ function openCharacter(id) {
   document.getElementById('sheetBackstory').innerHTML = c.backstory || '';
   document.getElementById('sheetSpells').innerHTML = c.spells || '';
   document.getElementById('sheetNotes').innerHTML = c.notes || '';
-  document.getElementById('sheetTrinkets').value = c.trinkets || '';
+  const trinketsEditor = document.getElementById('sheetTrinkets');
+  trinketsEditor.innerHTML = c.trinkets || '';
+  autoSizeEditable(trinketsEditor);
   document.getElementById('cCp').value = c.currency.cp;
   document.getElementById('cSp').value = c.currency.sp;
   document.getElementById('cEp').value = c.currency.ep;
@@ -1050,6 +1060,7 @@ function openCharacter(id) {
   renderDeathSaves(c);
   renderAttacks(c);
   renderInventory(c);
+  renderCustomInventory(c);
   renderCharSpells(c);
   renderSpellSlots(c);
   renderCustomResources(c);
@@ -1586,6 +1597,83 @@ function renderInventory(c) {
   updateTotalAC(c);
 }
 
+function renderCustomInventory(c) {
+  const wrap = document.getElementById('customInventory');
+  const hasEmptyRow = c.customInventory.some(item =>
+    !String(item.name || '').trim() && Number(item.qty) === 0
+  );
+  if (!hasEmptyRow) c.customInventory.push({ name: '', qty: 0 });
+  wrap.innerHTML = c.customInventory.map((item, idx) => `
+    <div class="resource-row custom-inventory-row" data-idx="${idx}">
+      <input type="text" class="resource-name-input" data-idx="${idx}" value="${escapeAttr(item.name)}" placeholder="Название предмета">
+      <input type="number" class="resource-total-input" data-idx="${idx}" min="0" value="${item.qty}" aria-label="Количество">
+      ${String(item.name || '').trim() || Number(item.qty) > 0
+        ? `<button type="button" class="custom-item-delete" data-idx="${idx}" title="Удалить предмет" aria-label="Удалить предмет">✕</button>`
+        : ''}
+    </div>
+  `).join('');
+
+  const normalizeItems = () => {
+    const filled = c.customInventory.filter(item =>
+      String(item.name || '').trim() || Number(item.qty) > 0
+    );
+    const changed = c.customInventory.length !== filled.length + 1;
+    c.customInventory = [...filled, { name: '', qty: 0 }];
+    return changed;
+  };
+  const appendItemRowIfNeeded = (idx, fieldClass) => {
+    const item = c.customInventory[idx];
+    if (idx !== c.customInventory.length - 1 ||
+        !(String(item.name || '').trim() || Number(item.qty) > 0)) return;
+    c.customInventory.push({ name: '', qty: 0 });
+    saveState();
+    renderCustomInventory(c);
+    const field = wrap.querySelector(`.${fieldClass}[data-idx="${idx}"]`);
+    if (field) {
+      field.focus();
+      if (field.setSelectionRange) field.setSelectionRange(field.value.length, field.value.length);
+    }
+  };
+  wrap.querySelectorAll('.resource-name-input').forEach(input => {
+    input.addEventListener('input', () => {
+      const idx = Number(input.dataset.idx);
+      c.customInventory[idx].name = input.value;
+      if (!input.value.trim() && normalizeItems()) {
+        saveState();
+        renderCustomInventory(c);
+        return;
+      }
+      saveState();
+      appendItemRowIfNeeded(idx, 'resource-name-input');
+    });
+  });
+  wrap.querySelectorAll('.resource-total-input').forEach(input => {
+    input.addEventListener('input', () => {
+      const idx = Number(input.dataset.idx);
+      c.customInventory[idx].qty = Math.max(0, parseInt(input.value) || 0);
+      if (!c.customInventory[idx].qty &&
+          !String(c.customInventory[idx].name || '').trim() &&
+          normalizeItems()) {
+        saveState();
+        renderCustomInventory(c);
+        return;
+      }
+      saveState();
+      appendItemRowIfNeeded(idx, 'resource-total-input');
+    });
+  });
+  wrap.querySelectorAll('.custom-item-delete').forEach(button => {
+    button.addEventListener('click', () => {
+      const idx = Number(button.dataset.idx);
+      const item = c.customInventory[idx];
+      if (!window.confirm(`Удалить предмет «${item.name || 'Без названия'}»?`)) return;
+      c.customInventory.splice(idx, 1);
+      saveState();
+      renderCustomInventory(c);
+    });
+  });
+}
+
 const ARMOR_DEX_CAP = { light: Infinity, medium: 2, heavy: 0 };
 
 function updateTotalAC(c) {
@@ -1650,10 +1738,17 @@ document.getElementById('addInvFromCatalog').addEventListener('click', () => {
   });
 });
 
+function autoSizeEditable(editor) {
+  if (!editor || !editor.classList.contains('auto-grow')) return;
+  editor.style.height = 'auto';
+  editor.style.height = `${editor.scrollHeight}px`;
+}
+
 // Форматируемые поля (contenteditable) — сохраняем HTML вместо простого текста
 [
   ['sheetSpells', 'spells'], ['sheetNotes', 'notes'],
-  ['sheetAppearance', 'appearance'], ['sheetBackstory', 'backstory']
+  ['sheetAppearance', 'appearance'], ['sheetBackstory', 'backstory'],
+  ['sheetTrinkets', 'trinkets']
 ].forEach(([elId, field]) => {
   document.getElementById(elId).addEventListener('input', () => {
     const c = getChar(currentCharId);
@@ -1661,6 +1756,7 @@ document.getElementById('addInvFromCatalog').addEventListener('click', () => {
     const el = document.getElementById(elId);
     c[field] = el.innerHTML;
     saveState();
+    autoSizeEditable(el);
     // Если поле полностью очищено — сбрасываем размер шрифта в панели обратно на "Обычный",
     // иначе новый набранный текст визуально мелкий, а селектор всё ещё показывает старый уровень
     if (el.textContent.trim() === '') {
@@ -1812,10 +1908,6 @@ document.getElementById('sheetSize').addEventListener('change', (e) => {
 });
 document.getElementById('sheetInspiration').addEventListener('change', (e) => {
   getChar(currentCharId).inspiration = e.target.checked;
-  saveState();
-});
-document.getElementById('sheetTrinkets').addEventListener('input', (e) => {
-  getChar(currentCharId).trinkets = e.target.value;
   saveState();
 });
 ['cCp', 'cSp', 'cEp', 'cGp', 'cPp'].forEach((elId) => {
