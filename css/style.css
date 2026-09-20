@@ -323,6 +323,28 @@ nav.tabbar button.active { color: var(--accent); }
   font-size: 13px;
 }
 
+.spell-roll-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+.spell-roll-btn {
+  min-width: 0;
+  padding: 8px 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: linear-gradient(160deg, #e0b13f, #a8790a);
+  color: #2a1c04;
+  border: 1px solid #fff2c9;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .spell-filters-header {
   display: flex;
   align-items: center;

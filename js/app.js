@@ -22,6 +22,23 @@ function saveState() {
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
 }
 
+function parseDiceExpression(expression) {
+  const match = String(expression || '').trim().match(/^(\d+)?\s*[dк]\s*(\d+)\s*([+-]\s*\d+)?$/i);
+  if (!match) return null;
+  const count = Number(match[1] || 1);
+  const sides = Number(match[2]);
+  const modifier = match[3] ? Number(match[3].replace(/\s/g, '')) : 0;
+  if (!Number.isInteger(count) || !Number.isInteger(sides) || count < 1 || sides < 1) return null;
+  return { count, sides, modifier };
+}
+
+function normalizeSpellRolls(spell) {
+  spell.rolls = Array.isArray(spell.rolls)
+    ? spell.rolls
+    : (typeof DEFAULT_SPELL_ROLLS !== 'undefined' ? (DEFAULT_SPELL_ROLLS[spell.id] || []) : []);
+  return spell;
+}
+
 let state = loadState();
 if (!state.spells) {
   state.spells = JSON.parse(JSON.stringify(DEFAULT_SPELLS));
@@ -59,9 +76,26 @@ function normalizeSpell(spell) {
   spell.source = SPELL_SOURCES.includes(source) ? source : (spell.custom ? 'HOMEBREW' : 'PHB');
   spell.edition = SPELL_EDITIONS.includes(String(spell.edition)) ? String(spell.edition) : '14';
   spell.classes = Array.isArray(spell.classes) ? spell.classes : [];
+  normalizeSpellRolls(spell);
   return spell;
 }
+
+function spellDuplicateKey(spell) {
+  return `${String(spell.name || '').trim().toLocaleLowerCase('ru-RU')}|${spell.level}|${spell.edition}`;
+}
+
+function deduplicateSpells(spells) {
+  const seen = new Set();
+  return spells.filter(spell => {
+    const key = spellDuplicateKey(spell);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 state.spells.forEach(normalizeSpell);
+state.spells = deduplicateSpells(state.spells);
 if (!Array.isArray(state.characters)) state.characters = [];
 if (!Array.isArray(state.bestiary)) state.bestiary = [];
 state.characters.forEach(character => {
@@ -83,6 +117,7 @@ if (state.settings.showDefaultBestiary === undefined) state.settings.showDefault
 if (state.settings.showDefaultItems === undefined) state.settings.showDefaultItems = false;
 if (state.settings.showDefaultSpells === undefined) state.settings.showDefaultSpells = false;
 if (state.settings.theme === 'coffee') state.settings.theme = 'undead'; // миграция: тему переименовали в "Нежить"
+saveState();
 
 function applyTheme() {
   document.body.setAttribute('data-theme', state.settings.theme || 'dark');
@@ -2199,16 +2234,34 @@ document.getElementById('itemsSearch').addEventListener('input', (e) => {
   renderItems();
 });
 
-function openSpellDetail(id, aux) {
+function resolveSpellRollExpression(expression, character) {
+  const abilityAliases = { STR: 'str', DEX: 'dex', CON: 'con', INT: 'int', WIS: 'wis', CHA: 'cha' };
+  return String(expression).replace(/\b(BMOD|STR|DEX|CON|INT|WIS|CHA)\b/gi, token => {
+    const ability = token.toUpperCase() === 'BMOD'
+      ? character?.spellcastingAbility
+      : abilityAliases[token.toUpperCase()];
+    const value = ability ? getAbilityMod(character, ability) : 0;
+    return String(value);
+  }).replace(/\+\-/g, '-').replace(/\-\-/g, '+');
+}
+
+function openSpellDetail(id, aux, character) {
   const s = state.spells.find(x => String(x.id) === String(id));
   const open = aux ? openAuxModal : openModal;
   const close = aux ? closeAuxModal : closeModal;
   playPageTurn();
   const editBtn = (s.custom && !aux) ? `<button class="secondary block" id="editSpell">Редактировать</button><button class="danger block" id="deleteSpell">Удалить</button>` : '';
+  const rollButtons = character
+    ? (s.rolls || []).map(expression => {
+      const resolved = resolveSpellRollExpression(expression, character);
+      return `<button type="button" class="spell-roll-btn" data-roll-expression="${escapeAttr(resolved)}">${escapeHtml(resolved)}</button>`;
+    }).join('')
+    : '';
   open(s.name, `
     <div style="font-size:20px;font-weight:700;text-transform:uppercase;margin-bottom:3px">${escapeHtml(s.name)}</div>
     <div class="meta" style="color:var(--text-dim);margin-bottom:12px">${escapeHtml(s.school)} · ${s.level === 0 ? 'Заговор' : 'Уровень ' + s.level} · ${escapeHtml(s.classes.join(', '))} · Ред. ${escapeHtml(s.edition)}</div>
     ${s.ritual ? '<div class="spell-ritual-label">Ритуал</div>' : ''}
+    ${rollButtons ? `<div class="spell-roll-buttons">${rollButtons}</div>` : ''}
     <div class="spell-detail-line"><b>Время кастования:</b> ${escapeHtml(s.time)}</div>
     <div class="spell-detail-line"><b>Расстояние:</b> ${escapeHtml(s.range)}</div>
     <div class="spell-detail-line"><b>Компоненты:</b> ${escapeHtml(formatSpellComponents(s))}${s.materialDescription ? ` (${escapeHtml(s.materialDescription)})` : ''}</div>
@@ -2218,6 +2271,9 @@ function openSpellDetail(id, aux) {
     <div class="meta spell-detail-source">Источник: ${escapeHtml(s.source || '—')}</div>
     ${editBtn}
   `);
+  document.querySelectorAll('.spell-roll-btn').forEach(button => {
+    button.addEventListener('click', () => rollDiceExpression(button.dataset.rollExpression, `${s.name} · ${button.dataset.rollExpression}`));
+  });
   if (s.custom && !aux) {
     document.getElementById('editSpell').addEventListener('click', () => openSpellForm(s));
     document.getElementById('deleteSpell').addEventListener('click', () => {
@@ -2231,7 +2287,7 @@ function openSpellDetail(id, aux) {
 }
 
 function openSpellForm(existing) {
-  const s = normalizeSpell(existing || { id: uid('sp'), name: '', level: 1, school: SPELL_SCHOOLS[0], time: '1 действие', range: '', components: '', componentFlags: { verbal: true, somatic: true, material: false }, materialDescription: '', duration: 'Мгновенно', concentration: false, ritual: false, classes: [], description: '', atHigherLevels: '', source: 'HOMEBREW', edition: '14', custom: true });
+  const s = normalizeSpell(existing || { id: uid('sp'), name: '', level: 1, school: SPELL_SCHOOLS[0], time: '1 действие', range: '', components: '', componentFlags: { verbal: true, somatic: true, material: false }, materialDescription: '', duration: 'Мгновенно', concentration: false, ritual: false, classes: [], description: '', atHigherLevels: '', rolls: [], source: 'HOMEBREW', edition: '14', custom: true });
   const levelOptions = Object.keys(SPELL_LEVEL_LABELS).map(l => `<option value="${l}" ${String(s.level) === l ? 'selected' : ''}>${SPELL_LEVEL_LABELS[l]}</option>`).join('');
   const schoolOptions = SPELL_SCHOOLS.map(sc => `<option ${sc === s.school ? 'selected' : ''}>${sc}</option>`).join('');
   const classChips = DEFAULT_CLASSES.map(c => `<button type="button" class="chip ${s.classes.includes(c) ? 'active' : ''}" data-c="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
@@ -2264,6 +2320,8 @@ function openSpellForm(existing) {
     <div class="chip-row" id="spClassChips">${classChips}</div>
     <label>Описание</label><textarea id="spDesc">${escapeHtml(s.description)}</textarea>
     <label>Описание на высших уровнях</label><textarea id="spHigherDesc">${escapeHtml(s.atHigherLevels)}</textarea>
+    <label>Предлагаемые броски (через запятую)</label>
+    <input id="spRolls" value="${escapeAttr((s.rolls || []).join(', '))}" placeholder="Например, 2к6+BMOD, 1к4+2">
     <button class="primary block" id="saveSpell">Сохранить</button>
   `);
   const selectedClasses = new Set(s.classes);
@@ -2299,6 +2357,7 @@ function openSpellForm(existing) {
     s.classes = Array.from(selectedClasses);
     s.description = document.getElementById('spDesc').value;
     s.atHigherLevels = document.getElementById('spHigherDesc').value;
+    s.rolls = document.getElementById('spRolls').value.split(',').map(value => value.trim()).filter(Boolean);
     s.custom = true;
     if (!state.spells.find(x => x.id === s.id)) state.spells.push(s);
     saveState();
@@ -2330,7 +2389,7 @@ function renderCharSpells(c) {
     `;
   }).join('');
   wrap.querySelectorAll('[data-open]').forEach(el => {
-    el.addEventListener('click', () => openSpellDetail(el.dataset.open));
+    el.addEventListener('click', () => openSpellDetail(el.dataset.open, false, c));
   });
   wrap.querySelectorAll('button[data-act="del"]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -3225,6 +3284,20 @@ function quickRoll(modifier, label) {
   playDiceRoll();
   showRollResultPopup(label, [roll], modifier, { crit: roll === 20, fail: roll === 1 });
   diceHistory.unshift({ label, total: roll + modifier, rolls: [roll], mod: modifier });
+}
+
+function rollDiceExpression(expression, label) {
+  const parsed = parseDiceExpression(expression);
+  if (!parsed) {
+    showToast(`Некорректный бросок: ${expression}`);
+    return;
+  }
+  const rolls = Array.from({ length: parsed.count }, () => 1 + Math.floor(Math.random() * parsed.sides));
+  const total = rolls.reduce((sum, value) => sum + value, 0) + parsed.modifier;
+  playDiceRoll();
+  showRollResultPopup(label, rolls, parsed.modifier);
+  diceHistory.unshift({ label, total, rolls, mod: parsed.modifier });
+  if (diceHistory.length > 50) diceHistory.length = 50;
 }
 
 function renderDiceModal() {
