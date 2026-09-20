@@ -22,6 +22,23 @@ function saveState() {
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
 }
 
+function parseDiceExpression(expression) {
+  const match = String(expression || '').trim().match(/^(\d+)?\s*[dк]\s*(\d+)\s*([+-]\s*\d+)?$/i);
+  if (!match) return null;
+  const count = Number(match[1] || 1);
+  const sides = Number(match[2]);
+  const modifier = match[3] ? Number(match[3].replace(/\s/g, '')) : 0;
+  if (!Number.isInteger(count) || !Number.isInteger(sides) || count < 1 || sides < 1) return null;
+  return { count, sides, modifier };
+}
+
+function normalizeSpellRolls(spell) {
+  spell.rolls = Array.isArray(spell.rolls)
+    ? spell.rolls
+    : (typeof DEFAULT_SPELL_ROLLS !== 'undefined' ? (DEFAULT_SPELL_ROLLS[spell.id] || []) : []);
+  return spell;
+}
+
 let state = loadState();
 if (!state.spells) {
   state.spells = JSON.parse(JSON.stringify(DEFAULT_SPELLS));
@@ -59,9 +76,26 @@ function normalizeSpell(spell) {
   spell.source = SPELL_SOURCES.includes(source) ? source : (spell.custom ? 'HOMEBREW' : 'PHB');
   spell.edition = SPELL_EDITIONS.includes(String(spell.edition)) ? String(spell.edition) : '14';
   spell.classes = Array.isArray(spell.classes) ? spell.classes : [];
+  normalizeSpellRolls(spell);
   return spell;
 }
+
+function spellDuplicateKey(spell) {
+  return `${String(spell.name || '').trim().toLocaleLowerCase('ru-RU')}|${spell.level}|${spell.edition}`;
+}
+
+function deduplicateSpells(spells) {
+  const seen = new Set();
+  return spells.filter(spell => {
+    const key = spellDuplicateKey(spell);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 state.spells.forEach(normalizeSpell);
+state.spells = deduplicateSpells(state.spells);
 if (!Array.isArray(state.characters)) state.characters = [];
 if (!Array.isArray(state.bestiary)) state.bestiary = [];
 state.characters.forEach(character => {
@@ -83,6 +117,7 @@ if (state.settings.showDefaultBestiary === undefined) state.settings.showDefault
 if (state.settings.showDefaultItems === undefined) state.settings.showDefaultItems = false;
 if (state.settings.showDefaultSpells === undefined) state.settings.showDefaultSpells = false;
 if (state.settings.theme === 'coffee') state.settings.theme = 'undead'; // миграция: тему переименовали в "Нежить"
+saveState();
 
 function applyTheme() {
   document.body.setAttribute('data-theme', state.settings.theme || 'dark');
@@ -160,6 +195,33 @@ function showToast(msg) {
   t.classList.add('show');
   clearTimeout(showToast._timer);
   showToast._timer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+function includesSearchText(value, query) {
+  return !query || String(value || '').toLocaleLowerCase('ru-RU').includes(String(query).toLocaleLowerCase('ru-RU'));
+}
+
+function renderFilterChips({ elementId, values, selected, dataKey, onSelect, formatLabel = value => escapeHtml(value) }) {
+  const wrap = document.getElementById(elementId);
+  if (!wrap) return;
+  wrap.innerHTML = values.map(value => `
+    <button type="button" class="chip ${String(value) === String(selected) ? 'active' : ''}" data-${dataKey}="${escapeAttr(value)}">
+      ${formatLabel(value)}
+    </button>
+  `).join('');
+  wrap.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => onSelect(chip.dataset[dataKey]));
+  });
+}
+
+function renderDiceHistory(container) {
+  if (!container) return;
+  container.innerHTML = diceHistory.slice(0, 12).map(history => {
+    const detail = history.rolls
+      ? ` (${history.rolls.join('+')}${history.mod ? (history.mod > 0 ? '+' + history.mod : history.mod) : ''})`
+      : '';
+    return `<div class="skill-row"><span>${escapeHtml(history.label)}</span><span class="mod">${history.total}${detail}</span></div>`;
+  }).join('') || '<div class="empty-state" style="padding:10px 0">Пока не было бросков</div>';
 }
 
 // ==================== NAVIGATION ====================
@@ -578,6 +640,7 @@ function newCharacter(name) {
     features: [],
     appearance: '', backstory: '',
     currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
+    customInventory: [],
     inventory: [],
     knownSpells: [],
     spells: '',
@@ -670,6 +733,13 @@ function migrateChar(c) {
   }));
   if (c.appearance === undefined) c.appearance = '';
   if (c.backstory === undefined) c.backstory = '';
+  if (!Array.isArray(c.customInventory)) c.customInventory = [];
+  c.customInventory = c.customInventory
+    .filter(item => item && typeof item === 'object')
+    .map(item => ({
+      name: String(item.name || ''),
+      qty: Math.max(0, parseInt(item.qty) || 0)
+    }));
   if (!c.currency) c.currency = { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 };
   return c;
 }
@@ -972,7 +1042,9 @@ function openCharacter(id) {
   document.getElementById('sheetBackstory').innerHTML = c.backstory || '';
   document.getElementById('sheetSpells').innerHTML = c.spells || '';
   document.getElementById('sheetNotes').innerHTML = c.notes || '';
-  document.getElementById('sheetTrinkets').value = c.trinkets || '';
+  const trinketsEditor = document.getElementById('sheetTrinkets');
+  trinketsEditor.innerHTML = c.trinkets || '';
+  autoSizeEditable(trinketsEditor);
   document.getElementById('cCp').value = c.currency.cp;
   document.getElementById('cSp').value = c.currency.sp;
   document.getElementById('cEp').value = c.currency.ep;
@@ -988,6 +1060,7 @@ function openCharacter(id) {
   renderDeathSaves(c);
   renderAttacks(c);
   renderInventory(c);
+  renderCustomInventory(c);
   renderCharSpells(c);
   renderSpellSlots(c);
   renderCustomResources(c);
@@ -1524,6 +1597,83 @@ function renderInventory(c) {
   updateTotalAC(c);
 }
 
+function renderCustomInventory(c) {
+  const wrap = document.getElementById('customInventory');
+  const hasEmptyRow = c.customInventory.some(item =>
+    !String(item.name || '').trim() && Number(item.qty) === 0
+  );
+  if (!hasEmptyRow) c.customInventory.push({ name: '', qty: 0 });
+  wrap.innerHTML = c.customInventory.map((item, idx) => `
+    <div class="resource-row custom-inventory-row" data-idx="${idx}">
+      <input type="text" class="resource-name-input" data-idx="${idx}" value="${escapeAttr(item.name)}" placeholder="Название предмета">
+      <input type="number" class="resource-total-input" data-idx="${idx}" min="0" value="${item.qty}" aria-label="Количество">
+      ${String(item.name || '').trim() || Number(item.qty) > 0
+        ? `<button type="button" class="custom-item-delete" data-idx="${idx}" title="Удалить предмет" aria-label="Удалить предмет">✕</button>`
+        : ''}
+    </div>
+  `).join('');
+
+  const normalizeItems = () => {
+    const filled = c.customInventory.filter(item =>
+      String(item.name || '').trim() || Number(item.qty) > 0
+    );
+    const changed = c.customInventory.length !== filled.length + 1;
+    c.customInventory = [...filled, { name: '', qty: 0 }];
+    return changed;
+  };
+  const appendItemRowIfNeeded = (idx, fieldClass) => {
+    const item = c.customInventory[idx];
+    if (idx !== c.customInventory.length - 1 ||
+        !(String(item.name || '').trim() || Number(item.qty) > 0)) return;
+    c.customInventory.push({ name: '', qty: 0 });
+    saveState();
+    renderCustomInventory(c);
+    const field = wrap.querySelector(`.${fieldClass}[data-idx="${idx}"]`);
+    if (field) {
+      field.focus();
+      if (field.setSelectionRange) field.setSelectionRange(field.value.length, field.value.length);
+    }
+  };
+  wrap.querySelectorAll('.resource-name-input').forEach(input => {
+    input.addEventListener('input', () => {
+      const idx = Number(input.dataset.idx);
+      c.customInventory[idx].name = input.value;
+      if (!input.value.trim() && normalizeItems()) {
+        saveState();
+        renderCustomInventory(c);
+        return;
+      }
+      saveState();
+      appendItemRowIfNeeded(idx, 'resource-name-input');
+    });
+  });
+  wrap.querySelectorAll('.resource-total-input').forEach(input => {
+    input.addEventListener('input', () => {
+      const idx = Number(input.dataset.idx);
+      c.customInventory[idx].qty = Math.max(0, parseInt(input.value) || 0);
+      if (!c.customInventory[idx].qty &&
+          !String(c.customInventory[idx].name || '').trim() &&
+          normalizeItems()) {
+        saveState();
+        renderCustomInventory(c);
+        return;
+      }
+      saveState();
+      appendItemRowIfNeeded(idx, 'resource-total-input');
+    });
+  });
+  wrap.querySelectorAll('.custom-item-delete').forEach(button => {
+    button.addEventListener('click', () => {
+      const idx = Number(button.dataset.idx);
+      const item = c.customInventory[idx];
+      if (!window.confirm(`Удалить предмет «${item.name || 'Без названия'}»?`)) return;
+      c.customInventory.splice(idx, 1);
+      saveState();
+      renderCustomInventory(c);
+    });
+  });
+}
+
 const ARMOR_DEX_CAP = { light: Infinity, medium: 2, heavy: 0 };
 
 function updateTotalAC(c) {
@@ -1588,10 +1738,17 @@ document.getElementById('addInvFromCatalog').addEventListener('click', () => {
   });
 });
 
+function autoSizeEditable(editor) {
+  if (!editor || !editor.classList.contains('auto-grow')) return;
+  editor.style.height = 'auto';
+  editor.style.height = `${editor.scrollHeight}px`;
+}
+
 // Форматируемые поля (contenteditable) — сохраняем HTML вместо простого текста
 [
   ['sheetSpells', 'spells'], ['sheetNotes', 'notes'],
-  ['sheetAppearance', 'appearance'], ['sheetBackstory', 'backstory']
+  ['sheetAppearance', 'appearance'], ['sheetBackstory', 'backstory'],
+  ['sheetTrinkets', 'trinkets']
 ].forEach(([elId, field]) => {
   document.getElementById(elId).addEventListener('input', () => {
     const c = getChar(currentCharId);
@@ -1599,6 +1756,7 @@ document.getElementById('addInvFromCatalog').addEventListener('click', () => {
     const el = document.getElementById(elId);
     c[field] = el.innerHTML;
     saveState();
+    autoSizeEditable(el);
     // Если поле полностью очищено — сбрасываем размер шрифта в панели обратно на "Обычный",
     // иначе новый набранный текст визуально мелкий, а селектор всё ещё показывает старый уровень
     if (el.textContent.trim() === '') {
@@ -1752,10 +1910,6 @@ document.getElementById('sheetInspiration').addEventListener('change', (e) => {
   getChar(currentCharId).inspiration = e.target.checked;
   saveState();
 });
-document.getElementById('sheetTrinkets').addEventListener('input', (e) => {
-  getChar(currentCharId).trinkets = e.target.value;
-  saveState();
-});
 ['cCp', 'cSp', 'cEp', 'cGp', 'cPp'].forEach((elId) => {
   const key = elId.slice(1).toLowerCase();
   document.getElementById(elId).addEventListener('input', () => {
@@ -1829,46 +1983,53 @@ function crToNumber(cr) {
 
 function renderBestiaryFilterChips() {
   const source = visibleBestiary();
-  const types = ['Все', ...new Set(source.map(b => b.type))];
-  const wrap = document.getElementById('bestiaryFilter');
-  wrap.innerHTML = types.map(t => `<button class="chip ${t === bestiaryFilter ? 'active' : ''}" data-t="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('');
-  wrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { bestiaryFilter = chip.dataset.t; renderBestiary(); });
+  renderFilterChips({
+    elementId: 'bestiaryFilter',
+    values: ['Все', ...new Set(source.map(b => b.type))],
+    selected: bestiaryFilter,
+    dataKey: 't',
+    onSelect: value => { bestiaryFilter = value; renderBestiary(); }
   });
 
   // Подтип (например, у "Гуманоид" бывают "гоблиноид", "орк" и т.п.) —
   // отдельный фильтр, чтобы существа с общим типом, но разными подтипами,
   // не путались друг с другом в списке "Тип".
-  const subtypes = ['Все', ...new Set(source.map(b => b.subtype).filter(Boolean))];
-  const subtypeWrap = document.getElementById('bestiarySubtypeFilter');
-  subtypeWrap.innerHTML = subtypes.map(st => `<button class="chip ${st === bestiarySubtypeFilter ? 'active' : ''}" data-st="${escapeHtml(st)}">${escapeHtml(st)}</button>`).join('');
-  subtypeWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { bestiarySubtypeFilter = chip.dataset.st; renderBestiary(); });
+  renderFilterChips({
+    elementId: 'bestiarySubtypeFilter',
+    values: ['Все', ...new Set(source.map(b => b.subtype).filter(Boolean))],
+    selected: bestiarySubtypeFilter,
+    dataKey: 'st',
+    onSelect: value => { bestiarySubtypeFilter = value; renderBestiary(); }
   });
 
-  const crWrap = document.getElementById('bestiaryCrFilter');
   const crValues = ['Все', ...new Set(source.map(b => b.cr).filter(Boolean))].sort((a, b) => {
     if (a === 'Все') return -1;
     if (b === 'Все') return 1;
     return crToNumber(a) - crToNumber(b);
   });
-  crWrap.innerHTML = crValues.map(cr => `<button class="chip ${cr === bestiaryCrFilter ? 'active' : ''}" data-cr="${escapeHtml(cr)}">${cr === 'Все' ? 'Все' : 'КО ' + escapeHtml(cr)}</button>`).join('');
-  crWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { bestiaryCrFilter = chip.dataset.cr; renderBestiary(); });
+  renderFilterChips({
+    elementId: 'bestiaryCrFilter',
+    values: crValues,
+    selected: bestiaryCrFilter,
+    dataKey: 'cr',
+    formatLabel: cr => cr === 'Все' ? 'Все' : 'КО ' + escapeHtml(cr),
+    onSelect: value => { bestiaryCrFilter = value; renderBestiary(); }
   });
 
-  const sizeWrap = document.getElementById('bestiarySizeFilter');
-  const sizeValues = ['Все', ...CREATURE_SIZES.filter(s => source.some(b => b.size === s))];
-  sizeWrap.innerHTML = sizeValues.map(s => `<button class="chip ${s === bestiarySizeFilter ? 'active' : ''}" data-s="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('');
-  sizeWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { bestiarySizeFilter = chip.dataset.s; renderBestiary(); });
+  renderFilterChips({
+    elementId: 'bestiarySizeFilter',
+    values: ['Все', ...CREATURE_SIZES.filter(size => source.some(b => b.size === size))],
+    selected: bestiarySizeFilter,
+    dataKey: 's',
+    onSelect: value => { bestiarySizeFilter = value; renderBestiary(); }
   });
 
-  const habWrap = document.getElementById('bestiaryHabitatFilter');
-  const habValues = ['Все', ...HABITATS.filter(h => source.some(b => (b.habitat || []).includes(h)))];
-  habWrap.innerHTML = habValues.map(h => `<button class="chip ${h === bestiaryHabitatFilter ? 'active' : ''}" data-h="${escapeHtml(h)}">${escapeHtml(h)}</button>`).join('');
-  habWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { bestiaryHabitatFilter = chip.dataset.h; renderBestiary(); });
+  renderFilterChips({
+    elementId: 'bestiaryHabitatFilter',
+    values: ['Все', ...HABITATS.filter(habitat => source.some(b => (b.habitat || []).includes(habitat)))],
+    selected: bestiaryHabitatFilter,
+    dataKey: 'h',
+    onSelect: value => { bestiaryHabitatFilter = value; renderBestiary(); }
   });
 }
 
@@ -1882,7 +2043,7 @@ function renderBestiary() {
       (bestiaryCrFilter === 'Все' || b.cr === bestiaryCrFilter) &&
       (bestiarySizeFilter === 'Все' || b.size === bestiarySizeFilter) &&
       (bestiaryHabitatFilter === 'Все' || (b.habitat || []).includes(bestiaryHabitatFilter)) &&
-      (!bestiarySearchQuery || b.name.toLowerCase().includes(bestiarySearchQuery.toLowerCase()))
+      includesSearchText(b.name, bestiarySearchQuery)
     )
     .sort((a, b) => crToNumber(a.cr) - crToNumber(b.cr));
   if (!items.length) { list.innerHTML = '<div class="empty-state">Ничего не найдено</div>'; return; }
@@ -2104,40 +2265,45 @@ const SPELL_LEVEL_LABELS = { 0: 'Заговор', 1: '1', 2: '2', 3: '3', 4: '4'
 function renderSpellFilterChips() {
   const levelWrap = document.getElementById('spellLevelFilter');
   const levels = ['Все', ...Array.from(new Set(visibleSpells().map(s => s.level))).sort((a, b) => a - b)];
-  levelWrap.innerHTML = levels.map(l => {
-    const label = l === 'Все' ? 'Все' : SPELL_LEVEL_LABELS[l];
-    return `<button class="chip ${String(l) === String(spellLevelFilter) ? 'active' : ''}" data-l="${l}">${label}</button>`;
-  }).join('');
-  levelWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { spellLevelFilter = chip.dataset.l === 'Все' ? 'Все' : parseInt(chip.dataset.l); renderSpells(); });
+  renderFilterChips({
+    elementId: 'spellLevelFilter',
+    values: levels,
+    selected: spellLevelFilter,
+    dataKey: 'l',
+    formatLabel: level => level === 'Все' ? 'Все' : SPELL_LEVEL_LABELS[level],
+    onSelect: value => { spellLevelFilter = value === 'Все' ? 'Все' : parseInt(value); renderSpells(); }
   });
 
-  const classWrap = document.getElementById('spellClassFilter');
-  const classes = ['Все', ...DEFAULT_CLASSES];
-  classWrap.innerHTML = classes.map(c => `<button class="chip ${c === spellClassFilter ? 'active' : ''}" data-c="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
-  classWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { spellClassFilter = chip.dataset.c; renderSpells(); });
+  renderFilterChips({
+    elementId: 'spellClassFilter',
+    values: ['Все', ...DEFAULT_CLASSES],
+    selected: spellClassFilter,
+    dataKey: 'c',
+    onSelect: value => { spellClassFilter = value; renderSpells(); }
   });
 
-  const schoolWrap = document.getElementById('spellSchoolFilter');
-  const schools = ['Все', ...SPELL_SCHOOLS];
-  schoolWrap.innerHTML = schools.map(s => `<button class="chip ${s === spellSchoolFilter ? 'active' : ''}" data-s="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('');
-  schoolWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { spellSchoolFilter = chip.dataset.s; renderSpells(); });
+  renderFilterChips({
+    elementId: 'spellSchoolFilter',
+    values: ['Все', ...SPELL_SCHOOLS],
+    selected: spellSchoolFilter,
+    dataKey: 's',
+    onSelect: value => { spellSchoolFilter = value; renderSpells(); }
   });
 
-  const sourceWrap = document.getElementById('spellSourceFilter');
-  const sources = ['Все', ...SPELL_SOURCES];
-  sourceWrap.innerHTML = sources.map(source => `<button class="chip ${source === spellSourceFilter ? 'active' : ''}" data-source="${source}">${source}</button>`).join('');
-  sourceWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { spellSourceFilter = chip.dataset.source; renderSpells(); });
+  renderFilterChips({
+    elementId: 'spellSourceFilter',
+    values: ['Все', ...SPELL_SOURCES],
+    selected: spellSourceFilter,
+    dataKey: 'source',
+    onSelect: value => { spellSourceFilter = value; renderSpells(); }
   });
 
-  const editionWrap = document.getElementById('spellEditionFilter');
-  const editions = ['Все', ...SPELL_EDITIONS];
-  editionWrap.innerHTML = editions.map(edition => `<button class="chip ${edition === spellEditionFilter ? 'active' : ''}" data-edition="${edition}">${edition}</button>`).join('');
-  editionWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { spellEditionFilter = chip.dataset.edition; renderSpells(); });
+  renderFilterChips({
+    elementId: 'spellEditionFilter',
+    values: ['Все', ...SPELL_EDITIONS],
+    selected: spellEditionFilter,
+    dataKey: 'edition',
+    onSelect: value => { spellEditionFilter = value; renderSpells(); }
   });
 }
 
@@ -2148,7 +2314,7 @@ function filteredSpells() {
     if (spellSchoolFilter !== 'Все' && s.school !== spellSchoolFilter) return false;
     if (spellSourceFilter !== 'Все' && s.source !== spellSourceFilter) return false;
     if (spellEditionFilter !== 'Все' && s.edition !== spellEditionFilter) return false;
-    if (spellSearchQuery && !s.name.toLowerCase().includes(spellSearchQuery.toLowerCase())) return false;
+    if (!includesSearchText(s.name, spellSearchQuery)) return false;
     return true;
   }).sort((a, b) => a.level - b.level || a.name.localeCompare(b.name, 'ru'));
 }
@@ -2199,16 +2365,34 @@ document.getElementById('itemsSearch').addEventListener('input', (e) => {
   renderItems();
 });
 
-function openSpellDetail(id, aux) {
+function resolveSpellRollExpression(expression, character) {
+  const abilityAliases = { STR: 'str', DEX: 'dex', CON: 'con', INT: 'int', WIS: 'wis', CHA: 'cha' };
+  return String(expression).replace(/\b(BMOD|STR|DEX|CON|INT|WIS|CHA)\b/gi, token => {
+    const ability = token.toUpperCase() === 'BMOD'
+      ? character?.spellcastingAbility
+      : abilityAliases[token.toUpperCase()];
+    const value = ability ? getAbilityMod(character, ability) : 0;
+    return String(value);
+  }).replace(/\+\-/g, '-').replace(/\-\-/g, '+');
+}
+
+function openSpellDetail(id, aux, character) {
   const s = state.spells.find(x => String(x.id) === String(id));
   const open = aux ? openAuxModal : openModal;
   const close = aux ? closeAuxModal : closeModal;
   playPageTurn();
   const editBtn = (s.custom && !aux) ? `<button class="secondary block" id="editSpell">Редактировать</button><button class="danger block" id="deleteSpell">Удалить</button>` : '';
+  const rollButtons = character
+    ? (s.rolls || []).map(expression => {
+      const resolved = resolveSpellRollExpression(expression, character);
+      return `<button type="button" class="spell-roll-btn" data-roll-expression="${escapeAttr(resolved)}">${escapeHtml(resolved)}</button>`;
+    }).join('')
+    : '';
   open(s.name, `
     <div style="font-size:20px;font-weight:700;text-transform:uppercase;margin-bottom:3px">${escapeHtml(s.name)}</div>
     <div class="meta" style="color:var(--text-dim);margin-bottom:12px">${escapeHtml(s.school)} · ${s.level === 0 ? 'Заговор' : 'Уровень ' + s.level} · ${escapeHtml(s.classes.join(', '))} · Ред. ${escapeHtml(s.edition)}</div>
     ${s.ritual ? '<div class="spell-ritual-label">Ритуал</div>' : ''}
+    ${rollButtons ? `<div class="spell-roll-buttons">${rollButtons}</div>` : ''}
     <div class="spell-detail-line"><b>Время кастования:</b> ${escapeHtml(s.time)}</div>
     <div class="spell-detail-line"><b>Расстояние:</b> ${escapeHtml(s.range)}</div>
     <div class="spell-detail-line"><b>Компоненты:</b> ${escapeHtml(formatSpellComponents(s))}${s.materialDescription ? ` (${escapeHtml(s.materialDescription)})` : ''}</div>
@@ -2218,6 +2402,9 @@ function openSpellDetail(id, aux) {
     <div class="meta spell-detail-source">Источник: ${escapeHtml(s.source || '—')}</div>
     ${editBtn}
   `);
+  document.querySelectorAll('.spell-roll-btn').forEach(button => {
+    button.addEventListener('click', () => rollDiceExpression(button.dataset.rollExpression, `${s.name} · ${button.dataset.rollExpression}`));
+  });
   if (s.custom && !aux) {
     document.getElementById('editSpell').addEventListener('click', () => openSpellForm(s));
     document.getElementById('deleteSpell').addEventListener('click', () => {
@@ -2231,7 +2418,7 @@ function openSpellDetail(id, aux) {
 }
 
 function openSpellForm(existing) {
-  const s = normalizeSpell(existing || { id: uid('sp'), name: '', level: 1, school: SPELL_SCHOOLS[0], time: '1 действие', range: '', components: '', componentFlags: { verbal: true, somatic: true, material: false }, materialDescription: '', duration: 'Мгновенно', concentration: false, ritual: false, classes: [], description: '', atHigherLevels: '', source: 'HOMEBREW', edition: '14', custom: true });
+  const s = normalizeSpell(existing || { id: uid('sp'), name: '', level: 1, school: SPELL_SCHOOLS[0], time: '1 действие', range: '', components: '', componentFlags: { verbal: true, somatic: true, material: false }, materialDescription: '', duration: 'Мгновенно', concentration: false, ritual: false, classes: [], description: '', atHigherLevels: '', rolls: [], source: 'HOMEBREW', edition: '14', custom: true });
   const levelOptions = Object.keys(SPELL_LEVEL_LABELS).map(l => `<option value="${l}" ${String(s.level) === l ? 'selected' : ''}>${SPELL_LEVEL_LABELS[l]}</option>`).join('');
   const schoolOptions = SPELL_SCHOOLS.map(sc => `<option ${sc === s.school ? 'selected' : ''}>${sc}</option>`).join('');
   const classChips = DEFAULT_CLASSES.map(c => `<button type="button" class="chip ${s.classes.includes(c) ? 'active' : ''}" data-c="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('');
@@ -2264,6 +2451,8 @@ function openSpellForm(existing) {
     <div class="chip-row" id="spClassChips">${classChips}</div>
     <label>Описание</label><textarea id="spDesc">${escapeHtml(s.description)}</textarea>
     <label>Описание на высших уровнях</label><textarea id="spHigherDesc">${escapeHtml(s.atHigherLevels)}</textarea>
+    <label>Предлагаемые броски (через запятую)</label>
+    <input id="spRolls" value="${escapeAttr((s.rolls || []).join(', '))}" placeholder="Например, 2к6+BMOD, 1к4+2">
     <button class="primary block" id="saveSpell">Сохранить</button>
   `);
   const selectedClasses = new Set(s.classes);
@@ -2299,6 +2488,7 @@ function openSpellForm(existing) {
     s.classes = Array.from(selectedClasses);
     s.description = document.getElementById('spDesc').value;
     s.atHigherLevels = document.getElementById('spHigherDesc').value;
+    s.rolls = document.getElementById('spRolls').value.split(',').map(value => value.trim()).filter(Boolean);
     s.custom = true;
     if (!state.spells.find(x => x.id === s.id)) state.spells.push(s);
     saveState();
@@ -2330,7 +2520,7 @@ function renderCharSpells(c) {
     `;
   }).join('');
   wrap.querySelectorAll('[data-open]').forEach(el => {
-    el.addEventListener('click', () => openSpellDetail(el.dataset.open));
+    el.addEventListener('click', () => openSpellDetail(el.dataset.open, false, c));
   });
   wrap.querySelectorAll('button[data-act="del"]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -2360,27 +2550,30 @@ document.getElementById('addSpellFromCatalog').addEventListener('click', () => {
 // ==================== ITEMS ====================
 function renderItemsFilterChips() {
   const source = visibleItems();
-  const types = ['Все', ...new Set(source.map(i => i.type))];
-  const wrap = document.getElementById('itemsFilter');
-  wrap.innerHTML = types.map(t => `<button class="chip ${t === itemsFilter ? 'active' : ''}" data-t="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('');
-  wrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { itemsFilter = chip.dataset.t; renderItems(); });
+  renderFilterChips({
+    elementId: 'itemsFilter',
+    values: ['Все', ...new Set(source.map(i => i.type))],
+    selected: itemsFilter,
+    dataKey: 't',
+    onSelect: value => { itemsFilter = value; renderItems(); }
   });
 
   // Подтип (например, у "Броня" бывают "лёгкая", "тяжёлая" и т.п.) — тот же
   // принцип, что и подтип в бестиарии.
-  const subtypes = ['Все', ...new Set(source.map(i => i.subtype).filter(Boolean))];
-  const subtypeWrap = document.getElementById('itemsSubtypeFilter');
-  subtypeWrap.innerHTML = subtypes.map(st => `<button class="chip ${st === itemsSubtypeFilter ? 'active' : ''}" data-st="${escapeHtml(st)}">${escapeHtml(st)}</button>`).join('');
-  subtypeWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { itemsSubtypeFilter = chip.dataset.st; renderItems(); });
+  renderFilterChips({
+    elementId: 'itemsSubtypeFilter',
+    values: ['Все', ...new Set(source.map(i => i.subtype).filter(Boolean))],
+    selected: itemsSubtypeFilter,
+    dataKey: 'st',
+    onSelect: value => { itemsSubtypeFilter = value; renderItems(); }
   });
 
-  const rarWrap = document.getElementById('itemsRarityFilter');
-  const rarValues = ['Все', ...RARITIES.filter(r => source.some(i => i.rarity === r))];
-  rarWrap.innerHTML = rarValues.map(r => `<button class="chip ${r === itemsRarityFilter ? 'active' : ''}" data-r="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join('');
-  rarWrap.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => { itemsRarityFilter = chip.dataset.r; renderItems(); });
+  renderFilterChips({
+    elementId: 'itemsRarityFilter',
+    values: ['Все', ...RARITIES.filter(rarity => source.some(i => i.rarity === rarity))],
+    selected: itemsRarityFilter,
+    dataKey: 'r',
+    onSelect: value => { itemsRarityFilter = value; renderItems(); }
   });
 }
 
@@ -2396,7 +2589,7 @@ function renderItems() {
       (itemsFilter === 'Все' || i.type === itemsFilter) &&
       (itemsSubtypeFilter === 'Все' || i.subtype === itemsSubtypeFilter) &&
       (itemsRarityFilter === 'Все' || i.rarity === itemsRarityFilter) &&
-      (!itemsSearchQuery || i.name.toLowerCase().includes(itemsSearchQuery.toLowerCase()))
+      includesSearchText(i.name, itemsSearchQuery)
     )
     .sort((a, b) => rarityToNumber(a.rarity) - rarityToNumber(b.rarity));
   if (!items.length) { list.innerHTML = '<div class="empty-state">Ничего не найдено</div>'; return; }
@@ -3227,6 +3420,20 @@ function quickRoll(modifier, label) {
   diceHistory.unshift({ label, total: roll + modifier, rolls: [roll], mod: modifier });
 }
 
+function rollDiceExpression(expression, label) {
+  const parsed = parseDiceExpression(expression);
+  if (!parsed) {
+    showToast(`Некорректный бросок: ${expression}`);
+    return;
+  }
+  const rolls = Array.from({ length: parsed.count }, () => 1 + Math.floor(Math.random() * parsed.sides));
+  const total = rolls.reduce((sum, value) => sum + value, 0) + parsed.modifier;
+  playDiceRoll();
+  showRollResultPopup(label, rolls, parsed.modifier);
+  diceHistory.unshift({ label, total, rolls, mod: parsed.modifier });
+  if (diceHistory.length > 50) diceHistory.length = 50;
+}
+
 function renderDiceModal() {
   const buttons = DICE_TYPES.map(d => `<button type="button" class="chip dice-btn ${d === selectedDie ? 'active' : ''}" data-d="${d}">d${d}</button>`).join('');
   const skinSwatches = DICE_SKIN_IDS.map(id => {
@@ -3234,9 +3441,6 @@ function renderDiceModal() {
     const grad = `linear-gradient(160deg, ${s.stops[0]}, ${s.stops[1]}, ${s.stops[2]})`;
     return `<button type="button" class="dice-skin-swatch ${currentDiceSkin() === id ? 'is-selected' : ''}" data-skin="${id}" style="background:${grad};border-color:${s.rim}" title="${s.label}"></button>`;
   }).join('');
-  const historyHtml = diceHistory.length
-    ? diceHistory.slice(0, 12).map(h => `<div class="skill-row"><span>${h.label}</span><span class="mod">${h.total}${h.rolls ? ' (' + h.rolls.join('+') + (h.mod ? (h.mod > 0 ? '+' + h.mod : h.mod) : '') + ')' : ''}</span></div>`).join('')
-    : '<div class="empty-state" style="padding:10px 0">Пока не было бросков</div>';
   openModal('Кубики', `
     <div class="chip-row dice-skin-row">${skinSwatches}</div>
     <div class="chip-row" id="diceButtons" style="flex-wrap:wrap">${buttons}</div>
@@ -3263,8 +3467,9 @@ function renderDiceModal() {
     </div>
     <button class="roll-dice-gold-btn" id="rollDiceBtn">⚅ Бросить</button>
     <div class="section-title" style="margin-top:10px">История</div>
-    <div id="diceHistoryList">${historyHtml}</div>
+    <div id="diceHistoryList"></div>
   `);
+  renderDiceHistory(document.getElementById('diceHistoryList'));
   renderDieDisplay(selectedDie === 100 ? 0 : selectedDie);
 
   document.querySelectorAll('.dice-skin-swatch').forEach(btn => {
@@ -3320,7 +3525,7 @@ function renderDiceModal() {
     playDiceRoll();
     animateDiceRoll(total, () => {
       diceHistory.unshift({ label, total, rolls, mod: modifier });
-      document.getElementById('diceHistoryList').innerHTML = diceHistory.slice(0, 12).map(h => `<div class="skill-row"><span>${h.label}</span><span class="mod">${h.total}${h.rolls.length > 1 || h.mod ? ' (' + h.rolls.join('+') + (h.mod ? (h.mod > 0 ? '+' + h.mod : h.mod) : '') + ')' : ''}</span></div>`).join('');
+      renderDiceHistory(document.getElementById('diceHistoryList'));
       const isCrit = selectedDie === 20 && rolls.length === 1 && rolls[0] === 20;
       const isFail = selectedDie === 20 && rolls.length === 1 && rolls[0] === 1;
       if (isCrit) triggerCritEffect('crit');
